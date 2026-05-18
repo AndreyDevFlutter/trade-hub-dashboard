@@ -13,6 +13,7 @@ function render() {
     <div class="entry ${e.method === 'POST' ? 'post' : ''}">
       <div class="row">
         <span class="method ${e.method}">${e.method}</span>
+        <span class="kind">${escapeHtml(e.kind || '')}</span>
         <span class="url">${escapeHtml(e.url)}</span>
         <span class="status">${e.status || ''}</span>
       </div>
