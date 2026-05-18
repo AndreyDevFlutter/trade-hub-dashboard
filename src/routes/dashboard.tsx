@@ -3,34 +3,19 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   TrendingUp,
-  ArrowUpRight,
-  ArrowDownRight,
   LogOut,
   Wifi,
   Loader2,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { userService } from "@/services/userService";
-import {
-  tradeService,
-  type AccountType,
-  type Direction,
-} from "@/services/tradeService";
+import { type AccountType } from "@/services/tradeService";
 import { authService } from "@/services/authService";
 import {
   actionbrokerService,
   type ABAsset,
 } from "@/services/actionbrokerService";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 export const Route = createFileRoute("/dashboard")({
@@ -42,14 +27,6 @@ export const Route = createFileRoute("/dashboard")({
   }),
   component: DashboardPage,
 });
-
-const FALLBACK_ASSETS: { symbol: string; name: string }[] = [
-  { symbol: "EURUSD", name: "EUR/USD" },
-  { symbol: "GBPUSD", name: "GBP/USD" },
-  { symbol: "USDJPY", name: "USD/JPY" },
-  { symbol: "BTCUSD", name: "Bitcoin" },
-  { symbol: "ETHUSD", name: "Ethereum" },
-];
 
 function formatMoney(v: number) {
   return v.toLocaleString("pt-BR", {
