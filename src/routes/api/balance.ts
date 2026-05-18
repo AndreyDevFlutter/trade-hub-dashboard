@@ -1,15 +1,32 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { getUserByToken } from "@/lib/mockStore.server";
+import { getCookie } from "@tanstack/react-start/server";
+import { brokerFetch, SESSION_COOKIE } from "@/lib/broker.server";
 
 export const Route = createFileRoute("/api/balance")({
   server: {
     handlers: {
-      GET: async ({ request }) => {
-        const user = getUserByToken(request.headers.get("authorization"));
-        if (!user) return new Response("Unauthorized", { status: 401 });
+      GET: async () => {
+        const cookieHeader = getCookie(SESSION_COOKIE);
+        if (!cookieHeader) return new Response("Unauthorized", { status: 401 });
+        const upstream = await brokerFetch("/api/auth/me", {
+          method: "GET",
+          cookieHeader,
+        });
+        if (!upstream.ok) return new Response("Unauthorized", { status: 401 });
+        const data = (await upstream.json().catch(() => null)) as
+          | {
+              user?: {
+                balances?: {
+                  real?: { balance?: number; available?: number };
+                  demo?: { balance?: number; available?: number };
+                };
+              };
+            }
+          | null;
+        const b = data?.user?.balances;
         return Response.json({
-          balance_real: user.balance_real,
-          balance_demo: user.balance_demo,
+          balance_real: b?.real?.available ?? b?.real?.balance ?? 0,
+          balance_demo: b?.demo?.available ?? b?.demo?.balance ?? 0,
         });
       },
     },
