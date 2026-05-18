@@ -17,8 +17,8 @@ interface ABAccount {
   balance?: string | number;
   available?: string | number;
   bonusBalance?: string | number;
-  type?: string; // "REAL" | "DEMO" if present
-  accountType?: string;
+  isDemo?: boolean;
+  isTournament?: boolean;
 }
 
 interface ABUser {
@@ -33,13 +33,12 @@ interface ABUser {
 
 function pickBalance(accounts: ABAccount[] | undefined, kind: "REAL" | "DEMO"): number {
   if (!accounts?.length) return 0;
-  const match = accounts.find(
-    (a) =>
-      (a.type ?? a.accountType ?? "").toUpperCase() === kind ||
-      (kind === "REAL" && a.currency === "USD" && (a.type ?? "").toUpperCase() !== "DEMO")
-  );
-  const a = match ?? accounts[0];
-  return Number(a.available ?? a.balance ?? 0);
+  const match = accounts.find((a) => {
+    if (a.isTournament) return false;
+    return kind === "DEMO" ? a.isDemo === true : !a.isDemo;
+  });
+  if (!match) return 0;
+  return Number(match.available ?? match.balance ?? 0);
 }
 
 function toProfile(raw: { user?: ABUser } & ABUser): Profile {

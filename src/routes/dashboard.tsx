@@ -97,8 +97,14 @@ function DashboardPage() {
     }
     setSubmitting(direction);
     try {
+      const selected = (assets ?? []).find((a) => a.symbol === asset);
+      if (!selected) {
+        toast.error("Ativo indisponível. Selecione outro.");
+        setSubmitting(null);
+        return;
+      }
       const res = await tradeService.sendOrder({
-        asset,
+        assetId: selected.id,
         direction,
         amount: Number(amount),
         account_type: accountType,

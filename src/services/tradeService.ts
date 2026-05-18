@@ -4,10 +4,11 @@ export type Direction = "CALL" | "PUT";
 export type AccountType = "DEMO" | "REAL";
 
 export interface OrderPayload {
-  asset: string;
+  assetId: string;
   direction: Direction;
   amount: number;
   account_type: AccountType;
+  duration?: number;
 }
 
 export interface OrderResponse {
@@ -23,24 +24,42 @@ interface ABOrderResp {
   message?: string;
   orderId?: string;
   id?: string;
+  trade?: { id?: string };
   data?: { id?: string; orderId?: string; balance?: number };
   balance?: number;
 }
 
 export const tradeService = {
   async sendOrder(order: OrderPayload): Promise<OrderResponse> {
-    const path = order.direction === "CALL" ? "/trading/buy" : "/trading/sell";
+    // 1) Garante que a conta ativa do usuário é a desejada (DEMO/REAL)
+    try {
+      await api.put("/users/profile", { accountType: order.account_type });
+    } catch {
+      /* segue mesmo que falhe */
+    }
+
+    // 2) Cria a operação
     const payload = {
-      symbol: order.asset,
+      assetId: order.assetId,
+      direction: order.direction, // CALL | PUT
       amount: order.amount,
-      accountType: order.account_type, // "DEMO" | "REAL"
-      direction: order.direction,
-      duration: 60,
+      duration: order.duration ?? 60,
     };
-    const { data } = await api.post<ABOrderResp>(path, payload);
+    const { data } = await api.post<ABOrderResp>("/trading/create", payload);
+
+    if (data.success === false) {
+      throw new Error(data.message || "Falha ao criar ordem");
+    }
+
     return {
       success: data.success ?? true,
-      order_id: data.orderId ?? data.id ?? data.data?.orderId ?? data.data?.id ?? "",
+      order_id:
+        data.orderId ??
+        data.id ??
+        data.trade?.id ??
+        data.data?.orderId ??
+        data.data?.id ??
+        "",
       message: data.message ?? "Ordem enviada",
       new_balance: Number(data.balance ?? data.data?.balance ?? 0),
       account_type: order.account_type,
