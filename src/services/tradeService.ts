@@ -24,7 +24,7 @@ interface ABOrderResp {
   message?: string;
   orderId?: string;
   id?: string;
-  trade?: { id?: string };
+  trade?: { id?: string; accountId?: string; balance?: number | string };
   data?: { id?: string; orderId?: string; balance?: number };
   balance?: number;
 }
@@ -44,6 +44,8 @@ export const tradeService = {
       direction: order.direction, // CALL | PUT
       amount: order.amount,
       duration: order.duration ?? 60,
+      type: order.account_type,
+      settlementMode: "BINARY",
     };
     const { data } = await api.post<ABOrderResp>("/trading/create", payload);
 
@@ -61,7 +63,7 @@ export const tradeService = {
         data.data?.id ??
         "",
       message: data.message ?? "Ordem enviada",
-      new_balance: Number(data.balance ?? data.data?.balance ?? 0),
+      new_balance: Number(data.balance ?? data.data?.balance ?? data.trade?.balance ?? 0),
       account_type: order.account_type,
     };
   },
