@@ -22,8 +22,8 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const navigate = useNavigate();
   const { token, setToken, setProfile } = useAuthStore();
-  const [email, setEmail] = useState("trader@demo.com");
-  const [password, setPassword] = useState("123456");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -98,8 +98,7 @@ function LoginPage() {
           </form>
 
           <p className="text-xs text-muted-foreground mt-6 text-center">
-            Demo: <span className="text-foreground">trader@demo.com</span> /{" "}
-            <span className="text-foreground">123456</span>
+            Use as credenciais ativas da corretora.
           </p>
         </div>
       </div>

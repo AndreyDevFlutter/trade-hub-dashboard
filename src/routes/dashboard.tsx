@@ -1,55 +1,23 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-  TrendingUp,
-  ArrowUpRight,
-  ArrowDownRight,
-  LogOut,
-  Wifi,
-  Loader2,
-} from "lucide-react";
+import { LogOut, TrendingUp, Wifi, Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { userService } from "@/services/userService";
-import {
-  tradeService,
-  type AccountType,
-  type Direction,
-} from "@/services/tradeService";
 import { authService } from "@/services/authService";
-import {
-  actionbrokerService,
-  type ABAsset,
-} from "@/services/actionbrokerService";
+import { actionbrokerService, type ABAsset } from "@/services/actionbrokerService";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
     meta: [
       { title: "Dashboard — TraderHub" },
-      { name: "description", content: "Painel de operações em tempo real." },
+      { name: "description", content: "Painel de ativos da corretora." },
     ],
   }),
   component: DashboardPage,
 });
-
-const FALLBACK_ASSETS: { symbol: string; name: string }[] = [
-  { symbol: "EURUSD", name: "EUR/USD" },
-  { symbol: "GBPUSD", name: "GBP/USD" },
-  { symbol: "USDJPY", name: "USD/JPY" },
-  { symbol: "BTCUSD", name: "Bitcoin" },
-  { symbol: "ETHUSD", name: "Ethereum" },
-];
 
 function formatMoney(v: number) {
   return v.toLocaleString("pt-BR", {
@@ -60,13 +28,9 @@ function formatMoney(v: number) {
 
 function DashboardPage() {
   const navigate = useNavigate();
-  const { token, profile, accountType, setAccountType, setProfile, updateBalance, logout } =
-    useAuthStore();
-  const [asset, setAsset] = useState("EURUSD");
-  const [amount, setAmount] = useState(10);
-  const [submitting, setSubmitting] = useState<Direction | null>(null);
-  const [lastResult, setLastResult] = useState<string | null>(null);
-  const [assets, setAssets] = useState<ABAsset[] | null>(null);
+  const { token, profile, accountType, setAccountType, setProfile, logout } = useAuthStore();
+  const [assets, setAssets] = useState<ABAsset[]>([]);
+  const [assetsLoading, setAssetsLoading] = useState(true);
   const [online, setOnline] = useState<number | null>(null);
 
   async function refreshAccount(syncAccountType = false) {
@@ -76,111 +40,60 @@ function DashboardPage() {
     return freshProfile;
   }
 
+  async function refreshAssets() {
+    setAssetsLoading(true);
+    try {
+      const list = await actionbrokerService.listAssets();
+      setAssets(list.filter((a) => a.isActive));
+    } catch {
+      setAssets([]);
+      toast.error("Falha ao carregar ativos");
+    } finally {
+      setAssetsLoading(false);
+    }
+  }
+
   useEffect(() => {
-    actionbrokerService.listAssets().then((list) => {
-      const visible = list.filter(
-        (a) => a.isActive && a.isOpen && Number(a.lastPrice) > 0,
-      );
-      setAssets(visible.length ? visible : null);
-      if (visible.length && !visible.some((a) => a.symbol === asset)) {
-        setAsset(visible[0].symbol);
-      }
-    }).catch(() => setAssets(null));
+    refreshAssets();
     actionbrokerService.onlineUsers().then(setOnline).catch(() => {});
-  }, [asset]);
+  }, []);
 
   useEffect(() => {
     if (!token) {
       navigate({ to: "/login" });
       return;
     }
-    refreshAccount(true).catch(() => toast.error("Falha ao carregar perfil"));
+    refreshAccount(true).catch(() => {
+      toast.error("Falha ao carregar perfil");
+      logout();
+      navigate({ to: "/login" });
+    });
     const interval = window.setInterval(() => {
       refreshAccount().catch(() => {});
     }, 5000);
     return () => window.clearInterval(interval);
-  }, [token, navigate, setAccountType, setProfile]);
-
-  async function handleOrder(direction: Direction) {
-    if (amount < 20) {
-      toast.error("O valor mínimo da entrada é US$ 20");
-      return;
-    }
-    setSubmitting(direction);
-    try {
-      const selected = (assets ?? []).find((a) => a.symbol === asset);
-      if (!selected) {
-        toast.error("Ativo indisponível. Selecione outro.");
-        setSubmitting(null);
-        return;
-      }
-      if (!selected.isOpen || Number(selected.lastPrice) <= 0) {
-        toast.error("Ativo sem cotação válida na corretora. Selecione outro.");
-        setSubmitting(null);
-        return;
-      }
-      const freshProfile = await refreshAccount();
-      const availableBalance =
-        accountType === "REAL" ? freshProfile.balance_real : freshProfile.balance_demo;
-      const selectedAccountId =
-        accountType === "REAL" ? freshProfile.account_id_real : freshProfile.account_id_demo;
-      if (!selectedAccountId) {
-        toast.error(`Conta ${accountType} não encontrada`);
-        setSubmitting(null);
-        return;
-      }
-      if (availableBalance < Number(amount)) {
-        toast.error(`Saldo insuficiente na conta ${accountType}`);
-        setSubmitting(null);
-        return;
-      }
-      const activeTrades = await tradeService.getActiveTrades();
-      const blockingTrades = activeTrades.filter(
-        (t) => t.accountId === selectedAccountId || (!t.accountId && t.type === accountType),
-      );
-      await Promise.allSettled(
-        blockingTrades
-          .filter((t) => t.endTime && Date.parse(t.endTime) <= Date.now())
-          .map((t) => tradeService.cancelTrade(t.id)),
-      );
-      const stillBlocked = blockingTrades.some(
-        (t) => !t.endTime || Date.parse(t.endTime) > Date.now(),
-      );
-      if (stillBlocked) {
-        toast.error("Aguarde a operação aberta finalizar antes de enviar outra");
-        setSubmitting(null);
-        return;
-      }
-      const res = await tradeService.sendOrder({
-        assetId: selected.id,
-        accountId: selectedAccountId,
-        direction,
-        amount: Number(amount),
-        account_type: accountType,
-      });
-      toast.success(res.message);
-      setLastResult(`${res.order_id} • ${res.message}`);
-      updateBalance(
-        accountType === "REAL" ? freshProfile.balance_real - Number(amount) : freshProfile.balance_real,
-        accountType === "DEMO" ? freshProfile.balance_demo - Number(amount) : freshProfile.balance_demo,
-      );
-      const balance = await userService.getBalance();
-      updateBalance(balance.balance_real, balance.balance_demo);
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? (err as Error)?.message ?? "Erro ao enviar ordem";
-      toast.error(msg);
-    } finally {
-      setSubmitting(null);
-    }
-  }
+  }, [token, navigate, setAccountType, setProfile, logout]);
 
   function handleLogout() {
     authService.logout();
     logout();
     navigate({ to: "/login" });
   }
+
+  const activeBalance = profile
+    ? accountType === "REAL"
+      ? profile.balance_real
+      : profile.balance_demo
+    : 0;
+
+  const assetGroups = useMemo(() => {
+    return assets.reduce<Record<string, ABAsset[]>>((acc, item) => {
+      const key = item.category || item.type || "Ativos";
+      acc[key] = acc[key] ?? [];
+      acc[key].push(item);
+      return acc;
+    }, {});
+  }, [assets]);
 
   if (!profile) {
     return (
@@ -190,12 +103,8 @@ function DashboardPage() {
     );
   }
 
-  const activeBalance =
-    accountType === "REAL" ? profile.balance_real : profile.balance_demo;
-
   return (
     <div className="min-h-screen">
-      {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -215,28 +124,6 @@ function DashboardPage() {
               </Avatar>
               <span className="text-sm hidden sm:inline">{profile.name}</span>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                fetch("/actionbroker-sniffer.zip")
-                  .then((r) => {
-                    if (!r.ok) throw new Error("Falha: " + r.status);
-                    return r.blob();
-                  })
-                  .then((blob) => {
-                    const a = document.createElement("a");
-                    a.href = URL.createObjectURL(blob);
-                    a.download = "actionbroker-sniffer.zip";
-                    a.click();
-                    URL.revokeObjectURL(a.href);
-                    toast.success("Extensão baixada!");
-                  })
-                  .catch((e) => toast.error(e.message));
-              }}
-            >
-              🔍 Extensão
-            </Button>
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline ml-1">Sair</span>
@@ -245,133 +132,78 @@ function DashboardPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 grid gap-6 lg:grid-cols-3">
-        {/* Account cards */}
-        <section className="lg:col-span-2 grid gap-4 sm:grid-cols-2">
-          <BalanceCard
-            label="Conta REAL"
-            value={profile.balance_real}
-            active={accountType === "REAL"}
-            tone="real"
-          />
-          <BalanceCard
-            label="Conta DEMO"
-            value={profile.balance_demo}
-            active={accountType === "DEMO"}
-            tone="demo"
-          />
-          <div className="sm:col-span-2 bg-card border border-border rounded-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Conta ativa
-                </p>
-                <p className="text-lg font-semibold mt-1">
-                  {accountType} · {formatMoney(activeBalance)}
-                </p>
-              </div>
-              <span
-                className={`text-xs px-2 py-1 rounded-md font-medium ${
-                  accountType === "REAL"
-                    ? "bg-bear/15 text-bear"
-                    : "bg-primary/15 text-primary"
-                }`}
-              >
-                {accountType === "REAL" ? "Dinheiro real" : "Treinamento"}
-              </span>
-            </div>
-            {lastResult && (
-              <p className="text-xs text-muted-foreground mt-4 border-t border-border pt-3">
-                Última ordem: <span className="text-foreground">{lastResult}</span>
-              </p>
-            )}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        <section className="grid gap-4 md:grid-cols-3">
+          <BalanceCard label="Conta REAL" value={profile.balance_real} active={accountType === "REAL"} tone="real" />
+          <BalanceCard label="Conta DEMO" value={profile.balance_demo} active={accountType === "DEMO"} tone="demo" />
+          <div className="bg-card border border-border rounded-xl p-6">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">Conta ativa</p>
+            <p className="text-xl font-semibold mt-2">{accountType} · {formatMoney(activeBalance)}</p>
+            <p className="text-xs text-muted-foreground mt-3">Saldo sincronizado com a corretora.</p>
           </div>
         </section>
 
-        {/* Operation panel */}
-        <aside className="bg-card border border-border rounded-xl p-6 h-fit lg:sticky lg:top-24">
-          <h2 className="font-semibold">Nova operação</h2>
-          <p className="text-xs text-muted-foreground">
-            Defina o ativo, valor e tipo de conta.
-          </p>
-
-          <div className="space-y-4 mt-5">
-            <div className="space-y-2">
-              <Label>Ativo</Label>
-              <Select value={asset} onValueChange={setAsset}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(assets ?? FALLBACK_ASSETS).map((a) => (
-                    <SelectItem key={a.symbol} value={a.symbol}>
-                      {a.symbol} · {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <section className="bg-card border border-border rounded-xl p-6">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-semibold">Ativos da corretora</h1>
+              <p className="text-sm text-muted-foreground mt-1">Lista sincronizada diretamente da plataforma.</p>
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="amount">Valor da entrada (USD)</Label>
-              <Input
-                id="amount"
-                type="number"
-                min={20}
-                step={1}
-                value={amount}
-                onChange={(e) => setAmount(Number(e.target.value))}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Tipo de conta</Label>
-              <Select
-                value={accountType}
-                onValueChange={(v) => setAccountType(v as AccountType)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DEMO">DEMO</SelectItem>
-                  <SelectItem value="REAL">REAL</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <Button
-                onClick={() => handleOrder("CALL")}
-                disabled={submitting !== null}
-                className="bg-bull text-bull-foreground hover:bg-bull/90 h-12 font-semibold"
-              >
-                {submitting === "CALL" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <ArrowUpRight className="h-4 w-4" /> CALL
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={() => handleOrder("PUT")}
-                disabled={submitting !== null}
-                className="bg-bear text-bear-foreground hover:bg-bear/90 h-12 font-semibold"
-              >
-                {submitting === "PUT" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <ArrowDownRight className="h-4 w-4" /> PUT
-                  </>
-                )}
-              </Button>
-            </div>
+            <Button variant="outline" size="sm" onClick={refreshAssets} disabled={assetsLoading}>
+              {assetsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Atualizar"}
+            </Button>
           </div>
-        </aside>
+
+          {assetsLoading ? (
+            <div className="py-16 flex justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : assets.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-10">Nenhum ativo retornado pela corretora.</p>
+          ) : (
+            <div className="mt-6 space-y-6">
+              {Object.entries(assetGroups).map(([group, list]) => (
+                <div key={group} className="space-y-3">
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{group}</h2>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {list.map((item) => (
+                      <AssetCard key={item.id} asset={item} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </main>
     </div>
+  );
+}
+
+function AssetCard({ asset }: { asset: ABAsset }) {
+  const price = Number(asset.lastPrice);
+  return (
+    <article className="rounded-xl border border-border bg-background/40 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">{asset.symbol}</h3>
+          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{asset.name}</p>
+        </div>
+        <span className={`text-xs px-2 py-1 rounded-md ${asset.isOpen ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
+          {asset.isOpen ? "Aberto" : "Fechado"}
+        </span>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+        <div>
+          <p className="text-xs text-muted-foreground">Preço</p>
+          <p className="font-medium tabular-nums">{Number.isFinite(price) && price > 0 ? price : "—"}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Payout</p>
+          <p className="font-medium tabular-nums">{asset.payout}%</p>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -394,17 +226,9 @@ function BalanceCard({
           : "border-border bg-card"
       }`}
     >
-      <p className="text-xs uppercase tracking-wider text-muted-foreground">
-        {label}
-      </p>
-      <p className="text-3xl font-semibold mt-2 tabular-nums">
-        {formatMoney(value)}
-      </p>
-      <p
-        className={`text-xs mt-3 ${
-          tone === "real" ? "text-bear" : "text-primary"
-        }`}
-      >
+      <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="text-3xl font-semibold mt-2 tabular-nums">{formatMoney(value)}</p>
+      <p className={`text-xs mt-3 ${tone === "real" ? "text-bear" : "text-primary"}`}>
         {tone === "real" ? "Capital real disponível" : "Saldo de prática"}
       </p>
     </div>

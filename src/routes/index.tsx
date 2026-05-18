@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { TrendingUp, ArrowRight, Shield, Zap, LineChart } from "lucide-react";
+import { TrendingUp, ArrowRight, Shield, RefreshCw, LineChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/authStore";
 
@@ -11,7 +11,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Painel profissional para operar via API com autenticação JWT, contas REAL e DEMO.",
+          "Painel profissional para acompanhar ativos da corretora com autenticação JWT.",
       },
     ],
   }),
@@ -44,11 +44,10 @@ function Landing() {
           API · JWT · Mock-ready
         </span>
         <h1 className="text-4xl sm:text-6xl font-semibold tracking-tight max-w-3xl mx-auto">
-          Opere em CALL ou PUT direto da sua conta de corretora.
+          Acompanhe os ativos direto da sua conta de corretora.
         </h1>
         <p className="text-muted-foreground mt-5 max-w-xl mx-auto">
-          Painel limpo, escuro, com troca instantânea entre conta REAL e DEMO.
-          Estrutura preparada para conectar em endpoints reais.
+          Painel limpo, escuro, com saldos e lista de ativos sincronizados com a plataforma.
         </p>
         <div className="mt-8 flex gap-3 justify-center">
           <Link to="/login">
@@ -65,9 +64,9 @@ function Landing() {
             desc="Token armazenado e injetado em todas as chamadas via interceptor Axios."
           />
           <Feature
-            icon={<Zap className="h-5 w-5 text-primary" />}
-            title="Ordens instantâneas"
-            desc="Envio autenticado para o endpoint /api/order com atualização de saldo."
+            icon={<RefreshCw className="h-5 w-5 text-primary" />}
+            title="Ativos sincronizados"
+            desc="Lista de ativos carregada diretamente da corretora autenticada."
           />
           <Feature
             icon={<LineChart className="h-5 w-5 text-primary" />}
