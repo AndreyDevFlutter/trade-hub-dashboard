@@ -16,6 +16,7 @@ import { Route as ApiProfileRouteImport } from './routes/api/profile'
 import { Route as ApiOrderRouteImport } from './routes/api/order'
 import { Route as ApiLoginRouteImport } from './routes/api/login'
 import { Route as ApiBalanceRouteImport } from './routes/api/balance'
+import { Route as ApiAbSplatRouteImport } from './routes/api/ab.$'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -52,6 +53,11 @@ const ApiBalanceRoute = ApiBalanceRouteImport.update({
   path: '/api/balance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAbSplatRoute = ApiAbSplatRouteImport.update({
+  id: '/api/ab/$',
+  path: '/api/ab/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/api/login': typeof ApiLoginRoute
   '/api/order': typeof ApiOrderRoute
   '/api/profile': typeof ApiProfileRoute
+  '/api/ab/$': typeof ApiAbSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   '/api/login': typeof ApiLoginRoute
   '/api/order': typeof ApiOrderRoute
   '/api/profile': typeof ApiProfileRoute
+  '/api/ab/$': typeof ApiAbSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   '/api/login': typeof ApiLoginRoute
   '/api/order': typeof ApiOrderRoute
   '/api/profile': typeof ApiProfileRoute
+  '/api/ab/$': typeof ApiAbSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +100,7 @@ export interface FileRouteTypes {
     | '/api/login'
     | '/api/order'
     | '/api/profile'
+    | '/api/ab/$'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
     | '/api/login'
     | '/api/order'
     | '/api/profile'
+    | '/api/ab/$'
   id:
     | '__root__'
     | '/'
@@ -109,6 +120,7 @@ export interface FileRouteTypes {
     | '/api/login'
     | '/api/order'
     | '/api/profile'
+    | '/api/ab/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,6 +131,7 @@ export interface RootRouteChildren {
   ApiLoginRoute: typeof ApiLoginRoute
   ApiOrderRoute: typeof ApiOrderRoute
   ApiProfileRoute: typeof ApiProfileRoute
+  ApiAbSplatRoute: typeof ApiAbSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -172,6 +185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiBalanceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/ab/$': {
+      id: '/api/ab/$'
+      path: '/api/ab/$'
+      fullPath: '/api/ab/$'
+      preLoaderRoute: typeof ApiAbSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -183,7 +203,18 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLoginRoute: ApiLoginRoute,
   ApiOrderRoute: ApiOrderRoute,
   ApiProfileRoute: ApiProfileRoute,
+  ApiAbSplatRoute: ApiAbSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
