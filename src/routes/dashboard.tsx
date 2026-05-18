@@ -109,23 +109,30 @@ function DashboardPage() {
         setSubmitting(null);
         return;
       }
-      const freshBalance = await userService.getBalance();
-      updateBalance(freshBalance.balance_real, freshBalance.balance_demo);
+      const freshProfile = await refreshAccount();
       const availableBalance =
-        accountType === "REAL" ? freshBalance.balance_real : freshBalance.balance_demo;
+        accountType === "REAL" ? freshProfile.balance_real : freshProfile.balance_demo;
+      const selectedAccountId =
+        accountType === "REAL" ? freshProfile.account_id_real : freshProfile.account_id_demo;
+      if (!selectedAccountId) {
+        toast.error(`Conta ${accountType} não encontrada`);
+        setSubmitting(null);
+        return;
+      }
       if (availableBalance < Number(amount)) {
         toast.error(`Saldo insuficiente na conta ${accountType}`);
         setSubmitting(null);
         return;
       }
       const activeTrades = await tradeService.getActiveTrades();
-      if (activeTrades.some((t) => t.type === accountType || !t.type)) {
+      if (activeTrades.some((t) => t.accountId === selectedAccountId || (!t.accountId && t.type === accountType))) {
         toast.error("Aguarde a operação aberta finalizar antes de enviar outra");
         setSubmitting(null);
         return;
       }
       const res = await tradeService.sendOrder({
         assetId: selected.id,
+        accountId: selectedAccountId,
         direction,
         amount: Number(amount),
         account_type: accountType,
@@ -133,15 +140,15 @@ function DashboardPage() {
       toast.success(res.message);
       setLastResult(`${res.order_id} • ${res.message}`);
       updateBalance(
-        accountType === "REAL" ? freshBalance.balance_real - Number(amount) : freshBalance.balance_real,
-        accountType === "DEMO" ? freshBalance.balance_demo - Number(amount) : freshBalance.balance_demo,
+        accountType === "REAL" ? freshProfile.balance_real - Number(amount) : freshProfile.balance_real,
+        accountType === "DEMO" ? freshProfile.balance_demo - Number(amount) : freshProfile.balance_demo,
       );
       const balance = await userService.getBalance();
       updateBalance(balance.balance_real, balance.balance_demo);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? "Erro ao enviar ordem";
+          ?.message ?? (err as Error)?.message ?? "Erro ao enviar ordem";
       toast.error(msg);
     } finally {
       setSubmitting(null);
