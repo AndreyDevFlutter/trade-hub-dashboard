@@ -17,6 +17,10 @@ import {
   type Direction,
 } from "@/services/tradeService";
 import { authService } from "@/services/authService";
+import {
+  actionbrokerService,
+  type ABAsset,
+} from "@/services/actionbrokerService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,7 +43,13 @@ export const Route = createFileRoute("/dashboard")({
   component: DashboardPage,
 });
 
-const ASSETS = ["EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD"];
+const FALLBACK_ASSETS: { symbol: string; name: string }[] = [
+  { symbol: "EURUSD", name: "EUR/USD" },
+  { symbol: "GBPUSD", name: "GBP/USD" },
+  { symbol: "USDJPY", name: "USD/JPY" },
+  { symbol: "BTCUSD", name: "Bitcoin" },
+  { symbol: "ETHUSD", name: "Ethereum" },
+];
 
 function formatMoney(v: number) {
   return v.toLocaleString("pt-BR", {
@@ -56,6 +66,16 @@ function DashboardPage() {
   const [amount, setAmount] = useState(10);
   const [submitting, setSubmitting] = useState<Direction | null>(null);
   const [lastResult, setLastResult] = useState<string | null>(null);
+  const [assets, setAssets] = useState<ABAsset[] | null>(null);
+  const [online, setOnline] = useState<number | null>(null);
+
+  useEffect(() => {
+    actionbrokerService.listAssets().then((list) => {
+      const visible = list.filter((a) => a.isActive);
+      setAssets(visible.length ? visible : null);
+    }).catch(() => setAssets(null));
+    actionbrokerService.onlineUsers().then(setOnline).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!token) {
@@ -126,7 +146,8 @@ function DashboardPage() {
           <div className="flex items-center gap-4">
             <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="h-2 w-2 rounded-full bg-bull animate-pulse" />
-              <Wifi className="h-3.5 w-3.5" /> Conectado
+              <Wifi className="h-3.5 w-3.5" />
+              {online !== null ? `${online} online` : "Conectado"}
             </span>
             <div className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
@@ -223,9 +244,9 @@ function DashboardPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ASSETS.map((a) => (
-                    <SelectItem key={a} value={a}>
-                      {a}
+                  {(assets ?? FALLBACK_ASSETS).map((a) => (
+                    <SelectItem key={a.symbol} value={a.symbol}>
+                      {a.symbol} · {a.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
