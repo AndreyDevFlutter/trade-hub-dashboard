@@ -17,6 +17,10 @@ import {
   type Direction,
 } from "@/services/tradeService";
 import { authService } from "@/services/authService";
+import {
+  actionbrokerService,
+  type ABAsset,
+} from "@/services/actionbrokerService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,7 +43,13 @@ export const Route = createFileRoute("/dashboard")({
   component: DashboardPage,
 });
 
-const ASSETS = ["EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD"];
+const FALLBACK_ASSETS: { symbol: string; name: string }[] = [
+  { symbol: "EURUSD", name: "EUR/USD" },
+  { symbol: "GBPUSD", name: "GBP/USD" },
+  { symbol: "USDJPY", name: "USD/JPY" },
+  { symbol: "BTCUSD", name: "Bitcoin" },
+  { symbol: "ETHUSD", name: "Ethereum" },
+];
 
 function formatMoney(v: number) {
   return v.toLocaleString("pt-BR", {
