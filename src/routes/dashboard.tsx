@@ -66,6 +66,16 @@ function DashboardPage() {
   const [amount, setAmount] = useState(10);
   const [submitting, setSubmitting] = useState<Direction | null>(null);
   const [lastResult, setLastResult] = useState<string | null>(null);
+  const [assets, setAssets] = useState<ABAsset[] | null>(null);
+  const [online, setOnline] = useState<number | null>(null);
+
+  useEffect(() => {
+    actionbrokerService.listAssets().then((list) => {
+      const visible = list.filter((a) => a.isActive && a.visibleInTrader !== false);
+      setAssets(visible.length ? visible : null);
+    }).catch(() => setAssets(null));
+    actionbrokerService.onlineUsers().then(setOnline).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!token) {
