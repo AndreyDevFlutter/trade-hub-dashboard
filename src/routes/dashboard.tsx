@@ -125,7 +125,18 @@ function DashboardPage() {
         return;
       }
       const activeTrades = await tradeService.getActiveTrades();
-      if (activeTrades.some((t) => t.accountId === selectedAccountId || (!t.accountId && t.type === accountType))) {
+      const blockingTrades = activeTrades.filter(
+        (t) => t.accountId === selectedAccountId || (!t.accountId && t.type === accountType),
+      );
+      await Promise.allSettled(
+        blockingTrades
+          .filter((t) => t.endTime && Date.parse(t.endTime) <= Date.now())
+          .map((t) => tradeService.cancelTrade(t.id)),
+      );
+      const stillBlocked = blockingTrades.some(
+        (t) => !t.endTime || Date.parse(t.endTime) > Date.now(),
+      );
+      if (stillBlocked) {
         toast.error("Aguarde a operação aberta finalizar antes de enviar outra");
         setSubmitting(null);
         return;
