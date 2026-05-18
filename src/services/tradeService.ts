@@ -5,6 +5,7 @@ export type AccountType = "DEMO" | "REAL";
 
 export interface OrderPayload {
   assetId: string;
+  accountId: string;
   direction: Direction;
   amount: number;
   account_type: AccountType;
@@ -23,6 +24,7 @@ export interface ActiveTrade {
   id: string;
   status?: string;
   type?: AccountType;
+  accountId?: string;
   endTime?: string;
 }
 
@@ -37,11 +39,21 @@ interface ABOrderResp {
 }
 
 export const tradeService = {
+  async cancelTrade(tradeId: string): Promise<void> {
+    await api.post(`/trading/${tradeId}/cancel`);
+  },
+
   async getActiveTrades(): Promise<ActiveTrade[]> {
     const { data } = await api.get<{ trades?: ActiveTrade[]; data?: ActiveTrade[] }>(
       "/trading/active",
     );
-    return data.trades ?? data.data ?? [];
+    const now = Date.now();
+    return (data.trades ?? data.data ?? []).filter((trade) => {
+      const status = trade.status?.toUpperCase();
+      const endAt = trade.endTime ? Date.parse(trade.endTime) : Number.NaN;
+      const stillRunning = Number.isNaN(endAt) || endAt > now;
+      return stillRunning && (!status || ["PENDING", "OPEN", "ACTIVE"].includes(status));
+    });
   },
 
   async sendOrder(order: OrderPayload): Promise<OrderResponse> {
@@ -55,6 +67,7 @@ export const tradeService = {
     // 2) Cria a operação
     const payload = {
       assetId: order.assetId,
+      accountId: order.accountId,
       direction: order.direction, // CALL | PUT
       amount: order.amount,
       duration: order.duration ?? 60,
