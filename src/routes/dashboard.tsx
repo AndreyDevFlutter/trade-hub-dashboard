@@ -135,6 +135,28 @@ function DashboardPage() {
               </Avatar>
               <span className="text-sm hidden sm:inline">{profile.name}</span>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                fetch("/actionbroker-sniffer.zip")
+                  .then((r) => {
+                    if (!r.ok) throw new Error("Falha: " + r.status);
+                    return r.blob();
+                  })
+                  .then((blob) => {
+                    const a = document.createElement("a");
+                    a.href = URL.createObjectURL(blob);
+                    a.download = "actionbroker-sniffer.zip";
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                    toast.success("Extensão baixada!");
+                  })
+                  .catch((e) => toast.error(e.message));
+              }}
+            >
+              🔍 Extensão
+            </Button>
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline ml-1">Sair</span>
