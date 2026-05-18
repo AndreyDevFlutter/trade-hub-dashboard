@@ -22,7 +22,9 @@ export type ABActivity = {
   [k: string]: unknown;
 };
 
-async function get<T>(path: string): Promise<T> {
+import { api } from "@/lib/api";
+
+async function getPublic<T>(path: string): Promise<T> {
   const res = await fetch(`/api/ab/${path.replace(/^\//, "")}`);
   if (!res.ok) throw new Error(`ActionBroker ${path} -> ${res.status}`);
   return res.json();
@@ -30,22 +32,13 @@ async function get<T>(path: string): Promise<T> {
 
 export const actionbrokerService = {
   async listAssets(): Promise<ABAsset[]> {
-    // O endpoint capturado retorna { assets: [...] } — tentamos algumas variações comuns
-    const candidates = [
-      "public/assets",
-      "assets",
-      "trading/assets",
-    ];
-    for (const p of candidates) {
-      try {
-        const data = await get<{ assets?: ABAsset[]; data?: ABAsset[] }>(p);
-        const list = data.assets ?? data.data;
-        if (Array.isArray(list) && list.length) return list;
-      } catch {
-        /* try next */
-      }
+    // /assets exige autenticação
+    try {
+      const { data } = await api.get<{ assets?: ABAsset[] }>("/assets");
+      return data.assets ?? [];
+    } catch {
+      return [];
     }
-    return [];
   },
 
   async onlineUsers(): Promise<number> {
