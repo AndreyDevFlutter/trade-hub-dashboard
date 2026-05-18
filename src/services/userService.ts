@@ -5,6 +5,8 @@ export interface Profile {
   avatar: string;
   balance_real: number;
   balance_demo: number;
+  account_id_real: string | null;
+  account_id_demo: string | null;
   account_type: "DEMO" | "REAL";
 }
 
@@ -14,6 +16,7 @@ export interface Balance {
 }
 
 interface ABAccount {
+  id?: string;
   currency?: string;
   balance?: string | number;
   available?: string | number;
@@ -43,12 +46,17 @@ function asMoney(v: string | number | undefined): number {
 
 function pickBalance(accounts: ABAccount[] | undefined, kind: "REAL" | "DEMO"): number {
   if (!accounts?.length) return 0;
-  const match = accounts.find((a) => {
+  const match = pickAccount(accounts, kind);
+  if (!match) return 0;
+  return asMoney(match.available ?? match.balance ?? 0);
+}
+
+function pickAccount(accounts: ABAccount[] | undefined, kind: "REAL" | "DEMO") {
+  if (!accounts?.length) return undefined;
+  return accounts.find((a) => {
     if (a.isTournament) return false;
     return kind === "DEMO" ? a.isDemo === true : !a.isDemo;
   });
-  if (!match) return 0;
-  return asMoney(match.available ?? match.balance ?? 0);
 }
 
 function toProfile(raw: { user?: ABUser } & ABUser): Profile {
@@ -67,6 +75,8 @@ function toProfile(raw: { user?: ABUser } & ABUser): Profile {
     balance_demo:
       asMoney(u.balances?.demo?.available ?? u.balances?.demo?.balance) ||
       pickBalance(u.accounts, "DEMO"),
+    account_id_real: u.balances?.real?.id ?? pickAccount(u.accounts, "REAL")?.id ?? null,
+    account_id_demo: u.balances?.demo?.id ?? pickAccount(u.accounts, "DEMO")?.id ?? null,
     account_type: u.accountType === "REAL" ? "REAL" : "DEMO",
   };
 }
