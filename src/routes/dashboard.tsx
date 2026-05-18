@@ -82,13 +82,14 @@ function DashboardPage() {
       navigate({ to: "/login" });
       return;
     }
-    if (!profile) {
-      userService
-        .getProfile()
-        .then(setProfile)
-        .catch(() => toast.error("Falha ao carregar perfil"));
-    }
-  }, [token, profile, navigate, setProfile]);
+    userService
+      .getProfile()
+      .then((freshProfile) => {
+        setProfile(freshProfile);
+        setAccountType(freshProfile.account_type);
+      })
+      .catch(() => toast.error("Falha ao carregar perfil"));
+  }, [token, navigate, setAccountType, setProfile]);
 
   async function handleOrder(direction: Direction) {
     if (amount <= 0) {
@@ -100,6 +101,15 @@ function DashboardPage() {
       const selected = (assets ?? []).find((a) => a.symbol === asset);
       if (!selected) {
         toast.error("Ativo indisponível. Selecione outro.");
+        setSubmitting(null);
+        return;
+      }
+      const freshBalance = await userService.getBalance();
+      updateBalance(freshBalance.balance_real, freshBalance.balance_demo);
+      const availableBalance =
+        accountType === "REAL" ? freshBalance.balance_real : freshBalance.balance_demo;
+      if (availableBalance < Number(amount)) {
+        toast.error(`Saldo insuficiente na conta ${accountType}`);
         setSubmitting(null);
         return;
       }
