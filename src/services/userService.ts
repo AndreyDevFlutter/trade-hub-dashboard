@@ -12,37 +12,49 @@ export interface Balance {
   balance_demo: number;
 }
 
+interface ABAccount {
+  currency?: string;
+  balance?: string | number;
+  available?: string | number;
+  bonusBalance?: string | number;
+  type?: string; // "REAL" | "DEMO" if present
+  accountType?: string;
+}
+
 interface ABUser {
-  name?: string;
-  fullName?: string;
+  firstName?: string;
+  lastName?: string;
   username?: string;
   email?: string;
   avatar?: string;
-  avatarUrl?: string;
-  photo?: string;
-  balanceReal?: number;
-  balanceDemo?: number;
-  realBalance?: number;
-  demoBalance?: number;
-  balance?: { real?: number; demo?: number };
+  accountType?: string; // conta ativa
+  accounts?: ABAccount[];
 }
-interface ABEnvelope<T> { data?: T; user?: T; success?: boolean }
 
-function toProfile(raw: ABUser & ABEnvelope<ABUser>): Profile {
-  const u: ABUser = raw.user ?? raw.data ?? raw;
+function pickBalance(accounts: ABAccount[] | undefined, kind: "REAL" | "DEMO"): number {
+  if (!accounts?.length) return 0;
+  const match = accounts.find(
+    (a) =>
+      (a.type ?? a.accountType ?? "").toUpperCase() === kind ||
+      (kind === "REAL" && a.currency === "USD" && (a.type ?? "").toUpperCase() !== "DEMO")
+  );
+  const a = match ?? accounts[0];
+  return Number(a.available ?? a.balance ?? 0);
+}
+
+function toProfile(raw: { user?: ABUser } & ABUser): Profile {
+  const u: ABUser = raw.user ?? raw;
+  const name =
+    [u.firstName, u.lastName].filter(Boolean).join(" ").trim() ||
+    u.username ||
+    u.email ||
+    "Usuário";
   return {
-    name: u.name ?? u.fullName ?? u.username ?? u.email ?? "Usuário",
-    avatar: u.avatar ?? u.avatarUrl ?? u.photo ?? "",
-    balance_real:
-      Number(u.balanceReal ?? u.realBalance ?? u.balance?.real ?? 0),
-    balance_demo:
-      Number(u.balanceDemo ?? u.demoBalance ?? u.balance?.demo ?? 0),
+    name,
+    avatar: u.avatar ?? "",
+    balance_real: pickBalance(u.accounts, "REAL"),
+    balance_demo: pickBalance(u.accounts, "DEMO"),
   };
-}
-
-function toBalance(raw: ABUser & ABEnvelope<ABUser>): Balance {
-  const p = toProfile(raw);
-  return { balance_real: p.balance_real, balance_demo: p.balance_demo };
 }
 
 export const userService = {
@@ -51,12 +63,8 @@ export const userService = {
     return toProfile(data);
   },
   async getBalance(): Promise<Balance> {
-    try {
-      const { data } = await api.get("/trading/balance");
-      return toBalance(data);
-    } catch {
-      const { data } = await api.get("/users/profile");
-      return toBalance(data);
-    }
+    const { data } = await api.get("/users/profile");
+    const p = toProfile(data);
+    return { balance_real: p.balance_real, balance_demo: p.balance_demo };
   },
 };
