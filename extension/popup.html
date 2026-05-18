@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  body { width: 520px; max-height: 600px; margin: 0; font-family: -apple-system, system-ui, sans-serif; background: #0f172a; color: #e2e8f0; font-size: 12px; }
+  header { padding: 10px 12px; background: #1e293b; display: flex; gap: 8px; align-items: center; position: sticky; top: 0; }
+  header h1 { margin: 0; font-size: 13px; flex: 1; }
+  button { background: #10b981; color: white; border: 0; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+  button.danger { background: #ef4444; }
+  input { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 6px 8px; border-radius: 4px; flex: 1; }
+  .entry { border-bottom: 1px solid #1e293b; padding: 8px 12px; }
+  .entry.post { background: rgba(16,185,129,0.08); }
+  .row { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+  .method { font-weight: bold; padding: 1px 6px; border-radius: 3px; font-size: 10px; }
+  .method.GET { background: #1e40af; }
+  .method.POST { background: #10b981; }
+  .method.PUT { background: #f59e0b; }
+  .method.DELETE { background: #ef4444; }
+  .url { color: #94a3b8; word-break: break-all; flex: 1; font-family: monospace; }
+  .status { color: #64748b; font-size: 10px; }
+  pre { background: #020617; padding: 6px; border-radius: 4px; overflow-x: auto; max-height: 160px; margin: 4px 0 0; font-size: 11px; color: #cbd5e1; }
+  .label { color: #10b981; font-weight: bold; font-size: 10px; text-transform: uppercase; margin-top: 4px; }
+  .empty { padding: 20px; text-align: center; color: #64748b; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎯 ActionBroker Sniffer</h1>
+  <button id="copy">📋 Copiar tudo</button>
+  <button id="clear" class="danger">🗑️</button>
+</header>
+<div style="padding: 8px 12px; background:#1e293b; border-bottom: 1px solid #334155;">
+  <input id="filter" placeholder="filtrar (ex: trading, order, buy)..." />
+</div>
+<div id="list"></div>
+<script src="popup.js"></script>
+</body>
+</html>
