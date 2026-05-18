@@ -78,11 +78,16 @@ function DashboardPage() {
 
   useEffect(() => {
     actionbrokerService.listAssets().then((list) => {
-      const visible = list.filter((a) => a.isActive);
+      const visible = list.filter(
+        (a) => a.isActive && a.isOpen && Number(a.lastPrice) > 0,
+      );
       setAssets(visible.length ? visible : null);
+      if (visible.length && !visible.some((a) => a.symbol === asset)) {
+        setAsset(visible[0].symbol);
+      }
     }).catch(() => setAssets(null));
     actionbrokerService.onlineUsers().then(setOnline).catch(() => {});
-  }, []);
+  }, [asset]);
 
   useEffect(() => {
     if (!token) {
@@ -97,8 +102,8 @@ function DashboardPage() {
   }, [token, navigate, setAccountType, setProfile]);
 
   async function handleOrder(direction: Direction) {
-    if (amount <= 0) {
-      toast.error("Informe um valor de entrada válido");
+    if (amount < 20) {
+      toast.error("O valor mínimo da entrada é US$ 20");
       return;
     }
     setSubmitting(direction);
@@ -106,6 +111,11 @@ function DashboardPage() {
       const selected = (assets ?? []).find((a) => a.symbol === asset);
       if (!selected) {
         toast.error("Ativo indisponível. Selecione outro.");
+        setSubmitting(null);
+        return;
+      }
+      if (!selected.isOpen || Number(selected.lastPrice) <= 0) {
+        toast.error("Ativo sem cotação válida na corretora. Selecione outro.");
         setSubmitting(null);
         return;
       }
