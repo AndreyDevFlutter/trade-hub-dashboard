@@ -317,7 +317,7 @@ function DashboardPage() {
               <Input
                 id="amount"
                 type="number"
-                min={1}
+                min={20}
                 step={1}
                 value={amount}
                 onChange={(e) => setAmount(Number(e.target.value))}
