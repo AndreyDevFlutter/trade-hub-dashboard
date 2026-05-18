@@ -69,6 +69,13 @@ function DashboardPage() {
   const [assets, setAssets] = useState<ABAsset[] | null>(null);
   const [online, setOnline] = useState<number | null>(null);
 
+  async function refreshAccount(syncAccountType = false) {
+    const freshProfile = await userService.getProfile();
+    setProfile(freshProfile);
+    if (syncAccountType) setAccountType(freshProfile.account_type);
+    return freshProfile;
+  }
+
   useEffect(() => {
     actionbrokerService.listAssets().then((list) => {
       const visible = list.filter((a) => a.isActive);
@@ -82,13 +89,11 @@ function DashboardPage() {
       navigate({ to: "/login" });
       return;
     }
-    userService
-      .getProfile()
-      .then((freshProfile) => {
-        setProfile(freshProfile);
-        setAccountType(freshProfile.account_type);
-      })
-      .catch(() => toast.error("Falha ao carregar perfil"));
+    refreshAccount(true).catch(() => toast.error("Falha ao carregar perfil"));
+    const interval = window.setInterval(() => {
+      refreshAccount().catch(() => {});
+    }, 5000);
+    return () => window.clearInterval(interval);
   }, [token, navigate, setAccountType, setProfile]);
 
   async function handleOrder(direction: Direction) {
@@ -113,6 +118,12 @@ function DashboardPage() {
         setSubmitting(null);
         return;
       }
+      const activeTrades = await tradeService.getActiveTrades();
+      if (activeTrades.some((t) => t.type === accountType || !t.type)) {
+        toast.error("Aguarde a operação aberta finalizar antes de enviar outra");
+        setSubmitting(null);
+        return;
+      }
       const res = await tradeService.sendOrder({
         assetId: selected.id,
         direction,
@@ -121,6 +132,10 @@ function DashboardPage() {
       });
       toast.success(res.message);
       setLastResult(`${res.order_id} • ${res.message}`);
+      updateBalance(
+        accountType === "REAL" ? freshBalance.balance_real - Number(amount) : freshBalance.balance_real,
+        accountType === "DEMO" ? freshBalance.balance_demo - Number(amount) : freshBalance.balance_demo,
+      );
       const balance = await userService.getBalance();
       updateBalance(balance.balance_real, balance.balance_demo);
     } catch (err: unknown) {

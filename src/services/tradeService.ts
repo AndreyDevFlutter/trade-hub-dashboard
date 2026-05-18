@@ -19,6 +19,13 @@ export interface OrderResponse {
   account_type: AccountType;
 }
 
+export interface ActiveTrade {
+  id: string;
+  status?: string;
+  type?: AccountType;
+  endTime?: string;
+}
+
 interface ABOrderResp {
   success?: boolean;
   message?: string;
@@ -30,6 +37,13 @@ interface ABOrderResp {
 }
 
 export const tradeService = {
+  async getActiveTrades(): Promise<ActiveTrade[]> {
+    const { data } = await api.get<{ trades?: ActiveTrade[]; data?: ActiveTrade[] }>(
+      "/trading/active",
+    );
+    return data.trades ?? data.data ?? [];
+  },
+
   async sendOrder(order: OrderPayload): Promise<OrderResponse> {
     // 1) Garante que a conta ativa do usuário é a desejada (DEMO/REAL)
     try {
