@@ -8,8 +8,8 @@ export const SESSION_COOKIE = "ab_session";
  * We capture them as a single "name=value; name=value" string we can replay.
  */
 export function extractUpstreamCookies(res: Response): string | null {
-  // @ts-expect-error - getSetCookie is standard but not in lib.dom yet
-  const all: string[] = res.headers.getSetCookie?.() ?? [];
+  const getSetCookie = (res.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie;
+  const all: string[] = getSetCookie ? getSetCookie.call(res.headers) : [];
   if (!all.length) {
     const single = res.headers.get("set-cookie");
     if (single) all.push(single);
