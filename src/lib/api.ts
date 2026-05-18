@@ -8,7 +8,7 @@ export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
 export const api = axios.create({
-  baseURL: "/api",
+  baseURL: "/api/ab",
   headers: { "Content-Type": "application/json" },
 });
 

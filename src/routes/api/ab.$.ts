@@ -1,30 +1,45 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-// Proxy genérico para a API pública da ActionBroker
-// Uso no front: fetch("/api/ab/public/assets") -> proxia para
-// https://api.actionbroker.app/api/public/assets
+// Proxy genérico para a API da ActionBroker (contorna CORS do browser)
+// /api/ab/<path>  ->  https://api.actionbroker.app/api/<path>
 const UPSTREAM = "https://api.actionbroker.app/api";
+
+async function proxy(request: Request, splat: string) {
+  const url = new URL(request.url);
+  const target = `${UPSTREAM}/${splat}${url.search}`;
+
+  const headers = new Headers();
+  const ct = request.headers.get("content-type");
+  if (ct) headers.set("content-type", ct);
+  const auth = request.headers.get("authorization");
+  if (auth) headers.set("authorization", auth);
+  headers.set("accept", "application/json");
+
+  const init: RequestInit = { method: request.method, headers };
+  if (!["GET", "HEAD"].includes(request.method)) {
+    init.body = await request.arrayBuffer();
+  }
+
+  const res = await fetch(target, init);
+  const body = await res.arrayBuffer();
+  return new Response(body, {
+    status: res.status,
+    headers: {
+      "Content-Type": res.headers.get("content-type") ?? "application/json",
+      "Cache-Control": "no-store",
+    },
+  });
+}
 
 export const Route = createFileRoute("/api/ab/$")({
   server: {
     handlers: {
-      GET: async ({ params, request }) => {
-        const path = params._splat ?? "";
-        const url = new URL(request.url);
-        const target = `${UPSTREAM}/${path}${url.search}`;
-        const res = await fetch(target, {
-          headers: { accept: "application/json" },
-        });
-        const body = await res.text();
-        return new Response(body, {
-          status: res.status,
-          headers: {
-            "Content-Type":
-              res.headers.get("content-type") ?? "application/json",
-            "Cache-Control": "no-store",
-          },
-        });
-      },
+      GET: async ({ params, request }) => proxy(request, params._splat ?? ""),
+      POST: async ({ params, request }) => proxy(request, params._splat ?? ""),
+      PUT: async ({ params, request }) => proxy(request, params._splat ?? ""),
+      PATCH: async ({ params, request }) => proxy(request, params._splat ?? ""),
+      DELETE: async ({ params, request }) =>
+        proxy(request, params._splat ?? ""),
     },
   },
 });
