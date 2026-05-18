@@ -71,7 +71,7 @@ function DashboardPage() {
 
   useEffect(() => {
     actionbrokerService.listAssets().then((list) => {
-      const visible = list.filter((a) => a.isActive && a.visibleInTrader !== false);
+      const visible = list.filter((a) => a.isActive);
       setAssets(visible.length ? visible : null);
     }).catch(() => setAssets(null));
     actionbrokerService.onlineUsers().then(setOnline).catch(() => {});
@@ -146,7 +146,8 @@ function DashboardPage() {
           <div className="flex items-center gap-4">
             <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="h-2 w-2 rounded-full bg-bull animate-pulse" />
-              <Wifi className="h-3.5 w-3.5" /> Conectado
+              <Wifi className="h-3.5 w-3.5" />
+              {online !== null ? `${online} online` : "Conectado"}
             </span>
             <div className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
@@ -243,9 +244,9 @@ function DashboardPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ASSETS.map((a) => (
-                    <SelectItem key={a} value={a}>
-                      {a}
+                  {(assets ?? FALLBACK_ASSETS).map((a) => (
+                    <SelectItem key={a.symbol} value={a.symbol}>
+                      {a.symbol} · {a.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
