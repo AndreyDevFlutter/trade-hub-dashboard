@@ -39,6 +39,10 @@ interface ABOrderResp {
 }
 
 export const tradeService = {
+  async cancelTrade(tradeId: string): Promise<void> {
+    await api.post(`/trading/${tradeId}/cancel`);
+  },
+
   async getActiveTrades(): Promise<ActiveTrade[]> {
     const { data } = await api.get<{ trades?: ActiveTrade[]; data?: ActiveTrade[] }>(
       "/trading/active",
