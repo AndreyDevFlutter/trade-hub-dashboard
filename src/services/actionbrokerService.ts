@@ -42,14 +42,14 @@ export const actionbrokerService = {
   },
 
   async onlineUsers(): Promise<number> {
-    const data = await get<{ data?: { count?: number } }>(
+    const data = await getPublic<{ data?: { count?: number } }>(
       "public/social-proof/online-users"
     );
     return data?.data?.count ?? 0;
   },
 
   async activities(limit = 20, minProfit = 1): Promise<ABActivity[]> {
-    const data = await get<{ data?: ABActivity[] }>(
+    const data = await getPublic<{ data?: ABActivity[] }>(
       `public/social-proof/activities?limit=${limit}&minProfit=${minProfit}`
     );
     return data?.data ?? [];
