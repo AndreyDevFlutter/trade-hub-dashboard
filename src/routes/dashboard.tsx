@@ -5,6 +5,7 @@ import { LogOut, TrendingUp, Wifi, Loader2, ArrowUpRight, ArrowDownRight } from 
 import { useAuthStore } from "@/store/authStore";
 import { userService } from "@/services/userService";
 import { authService } from "@/services/authService";
+import { tradeService } from "@/services/tradeService";
 import {
   actionbrokerService,
   type ABAsset,
@@ -12,6 +13,7 @@ import {
   type ABTrade,
 } from "@/services/actionbrokerService";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 export const Route = createFileRoute("/dashboard")({
