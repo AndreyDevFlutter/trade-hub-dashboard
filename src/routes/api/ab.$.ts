@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 // Proxy genérico para a API da ActionBroker (contorna CORS do browser)
-// /api/ab/<path>  ->  https://api.actionbroker.app/<path>
-const UPSTREAM = "https://api.actionbroker.app";
+// /api/ab/<path>  ->  https://api.actionbroker.app/api/<path>
+const UPSTREAM = "https://api.actionbroker.app/api";
 
 async function proxy(request: Request, splat: string) {
   const url = new URL(request.url);
