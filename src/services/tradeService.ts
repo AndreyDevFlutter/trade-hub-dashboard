@@ -56,25 +56,36 @@ export const tradeService = {
     });
   },
 
-  async sendOrder(order: OrderPayload): Promise<OrderResponse> {
-    // 1) Garante que a conta ativa do usuário é a desejada (DEMO/REAL)
+  async sendOrder(
+    order: OrderPayload & { asset?: string; timeFrame?: "M1" | "M5" | "M15"; entryPrice?: number },
+  ): Promise<OrderResponse> {
+    // 1) Garante conta ativa (DEMO/REAL) via endpoint correto
     try {
-      await api.put("/users/profile", { accountType: order.account_type });
+      await api.post("/users/change-account-type", { accountType: order.account_type });
     } catch {
       /* segue mesmo que falhe */
     }
 
-    // 2) Cria a operação
-    const payload = {
-      assetId: order.assetId,
-      accountId: order.accountId,
-      direction: order.direction, // CALL | PUT
+    // 2) Cria a operação — endpoint real: POST /orders
+    // payload: { asset, amount, direction: "Buy"|"Sell", timeFrame: "M1"|"M5"|"M15", entry_price? }
+    const direction = order.direction === "CALL" ? "Buy" : "Sell";
+    const timeFrame =
+      order.timeFrame ??
+      (order.duration && order.duration >= 900
+        ? "M15"
+        : order.duration && order.duration >= 300
+          ? "M5"
+          : "M1");
+
+    const payload: Record<string, unknown> = {
+      asset: order.asset ?? order.assetId,
       amount: order.amount,
-      duration: order.duration ?? 60,
-      type: order.account_type,
-      settlementMode: "BINARY",
+      direction,
+      timeFrame,
     };
-    const { data } = await api.post<ABOrderResp>("/trading/create", payload);
+    if (order.entryPrice != null) payload.entry_price = order.entryPrice;
+
+    const { data } = await api.post<ABOrderResp>("/orders", payload);
 
     if (data.success === false) {
       throw new Error(data.message || "Falha ao criar ordem");
