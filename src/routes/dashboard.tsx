@@ -5,7 +5,6 @@ import { LogOut, TrendingUp, Wifi, Loader2, ArrowUpRight, ArrowDownRight } from 
 import { useAuthStore } from "@/store/authStore";
 import { userService } from "@/services/userService";
 import { authService } from "@/services/authService";
-import { tradeService } from "@/services/tradeService";
 import {
   actionbrokerService,
   type ABAsset,
@@ -13,7 +12,6 @@ import {
   type ABTrade,
 } from "@/services/actionbrokerService";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 export const Route = createFileRoute("/dashboard")({
@@ -209,8 +207,6 @@ function DashboardPage() {
           </div>
         </section>
 
-        <TradePanel assets={assets} accountType={accountType} onPlaced={refreshTrades} />
-
         {tabAssets.length > 0 && (
           <section className="bg-card border border-border rounded-xl p-6">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
@@ -392,143 +388,6 @@ function AssetCard({ asset }: { asset: ABAsset }) {
         </div>
       </div>
     </article>
-  );
-}
-
-function TradePanel({
-  assets,
-  accountType,
-  onPlaced,
-}: {
-  assets: ABAsset[];
-  accountType: "REAL" | "DEMO";
-  onPlaced: () => void;
-}) {
-  const tradable = useMemo(() => assets.filter((a) => a.isOpen), [assets]);
-  const [asset, setAsset] = useState<string>("");
-  const [amount, setAmount] = useState<string>("1");
-  const [timeFrame, setTimeFrame] = useState<"M1" | "M5" | "M15">("M1");
-  const [sending, setSending] = useState<null | "CALL" | "PUT">(null);
-
-  useEffect(() => {
-    if (!asset && tradable.length > 0) setAsset(tradable[0].symbol);
-  }, [tradable, asset]);
-
-  async function place(direction: "CALL" | "PUT") {
-    const amt = Number(amount);
-    if (!asset || !Number.isFinite(amt) || amt <= 0) {
-      toast.error("Informe ativo e valor válido");
-      return;
-    }
-    setSending(direction);
-    try {
-      const res = await tradeService.sendOrder({
-        assetId: asset,
-        asset,
-        accountId: "",
-        direction,
-        amount: amt,
-        account_type: accountType,
-        timeFrame,
-      });
-      toast.success(res.message || `Ordem ${direction === "CALL" ? "Buy" : "Sell"} enviada`);
-      onPlaced();
-    } catch (err) {
-      const msg =
-        (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data
-          ?.message ?? (err as Error)?.message ?? "Falha ao enviar ordem";
-      toast.error(msg);
-    } finally {
-      setSending(null);
-    }
-  }
-
-  return (
-    <section className="bg-card border border-border rounded-xl p-6">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div>
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-            Operar
-          </h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            Conta ativa: <span className="font-medium">{accountType}</span>
-          </p>
-        </div>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-4">
-        <label className="flex flex-col gap-1.5 text-xs">
-          <span className="text-muted-foreground">Ativo</span>
-          <select
-            value={asset}
-            onChange={(e) => setAsset(e.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-          >
-            {tradable.length === 0 && <option value="">Nenhum ativo aberto</option>}
-            {tradable.map((a) => (
-              <option key={a.id} value={a.symbol}>
-                {a.symbol} · {a.payout}%
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="flex flex-col gap-1.5 text-xs">
-          <span className="text-muted-foreground">Valor (USD)</span>
-          <Input
-            type="number"
-            min={1}
-            step={1}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </label>
-
-        <label className="flex flex-col gap-1.5 text-xs">
-          <span className="text-muted-foreground">Expiração</span>
-          <select
-            value={timeFrame}
-            onChange={(e) => setTimeFrame(e.target.value as "M1" | "M5" | "M15")}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-          >
-            <option value="M1">M1 (1 min)</option>
-            <option value="M5">M5 (5 min)</option>
-            <option value="M15">M15 (15 min)</option>
-          </select>
-        </label>
-
-        <div className="grid grid-cols-2 gap-2 items-end">
-          <Button
-            type="button"
-            onClick={() => place("CALL")}
-            disabled={sending !== null || !asset}
-            className="h-10 bg-bull hover:bg-bull/90 text-white"
-          >
-            {sending === "CALL" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <>
-                <ArrowUpRight className="h-4 w-4 mr-1" /> Buy
-              </>
-            )}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => place("PUT")}
-            disabled={sending !== null || !asset}
-            className="h-10 bg-bear hover:bg-bear/90 text-white"
-          >
-            {sending === "PUT" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <>
-                <ArrowDownRight className="h-4 w-4 mr-1" /> Sell
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-    </section>
   );
 }
 
