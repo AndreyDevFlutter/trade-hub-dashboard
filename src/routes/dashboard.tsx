@@ -1,11 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { LogOut, TrendingUp, Wifi, Loader2 } from "lucide-react";
+import { LogOut, TrendingUp, Wifi, Loader2, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { userService } from "@/services/userService";
 import { authService } from "@/services/authService";
-import { actionbrokerService, type ABAsset } from "@/services/actionbrokerService";
+import {
+  actionbrokerService,
+  type ABAsset,
+  type ABTab,
+  type ABTrade,
+} from "@/services/actionbrokerService";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
@@ -20,18 +25,28 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 function formatMoney(v: number) {
-  return v.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "USD",
-  });
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "USD" });
+}
+
+function formatTime(iso?: string) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  } catch {
+    return "—";
+  }
 }
 
 function DashboardPage() {
   const navigate = useNavigate();
   const { token, profile, accountType, setAccountType, setProfile, logout } = useAuthStore();
   const [assets, setAssets] = useState<ABAsset[]>([]);
+  const [tabs, setTabs] = useState<ABTab[]>([]);
+  const [activeTrades, setActiveTrades] = useState<ABTrade[]>([]);
+  const [history, setHistory] = useState<ABTrade[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(true);
   const [online, setOnline] = useState<number | null>(null);
+  const [switching, setSwitching] = useState(false);
 
   async function refreshAccount(syncAccountType = false) {
     const freshProfile = await userService.getProfile();
@@ -43,18 +58,46 @@ function DashboardPage() {
   async function refreshAssets() {
     setAssetsLoading(true);
     try {
-      const list = await actionbrokerService.listAssets();
+      const [list, tabList] = await Promise.all([
+        actionbrokerService.listAssets(),
+        actionbrokerService.listTabs(),
+      ]);
       setAssets(list.filter((a) => a.isActive));
+      setTabs(tabList);
     } catch {
-      setAssets([]);
       toast.error("Falha ao carregar ativos");
     } finally {
       setAssetsLoading(false);
     }
   }
 
+  async function refreshTrades() {
+    const [act, hist] = await Promise.all([
+      actionbrokerService.activeTrades(),
+      actionbrokerService.tradeHistory(20),
+    ]);
+    setActiveTrades(act);
+    setHistory(hist);
+  }
+
+  async function handleSwitchAccount(next: "REAL" | "DEMO") {
+    if (next === accountType || switching) return;
+    setSwitching(true);
+    try {
+      await actionbrokerService.switchAccount(next);
+      setAccountType(next);
+      await refreshAccount();
+      toast.success(`Conta ${next} ativada`);
+    } catch {
+      toast.error("Falha ao trocar de conta");
+    } finally {
+      setSwitching(false);
+    }
+  }
+
   useEffect(() => {
     refreshAssets();
+    refreshTrades();
     actionbrokerService.onlineUsers().then(setOnline).catch(() => {});
   }, []);
 
@@ -70,6 +113,7 @@ function DashboardPage() {
     });
     const interval = window.setInterval(() => {
       refreshAccount().catch(() => {});
+      refreshTrades().catch(() => {});
     }, 5000);
     return () => window.clearInterval(interval);
   }, [token, navigate, setAccountType, setProfile, logout]);
@@ -85,6 +129,8 @@ function DashboardPage() {
       ? profile.balance_real
       : profile.balance_demo
     : 0;
+
+  const tabAssets = useMemo(() => tabs.map((t) => t.asset).filter(Boolean), [tabs]);
 
   const assetGroups = useMemo(() => {
     return assets.reduce<Record<string, ABAsset[]>>((acc, item) => {
@@ -134,20 +180,73 @@ function DashboardPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         <section className="grid gap-4 md:grid-cols-3">
-          <BalanceCard label="Conta REAL" value={profile.balance_real} active={accountType === "REAL"} tone="real" />
-          <BalanceCard label="Conta DEMO" value={profile.balance_demo} active={accountType === "DEMO"} tone="demo" />
+          <BalanceCard
+            label="Conta REAL"
+            value={profile.balance_real}
+            active={accountType === "REAL"}
+            tone="real"
+            onClick={() => handleSwitchAccount("REAL")}
+            disabled={switching}
+          />
+          <BalanceCard
+            label="Conta DEMO"
+            value={profile.balance_demo}
+            active={accountType === "DEMO"}
+            tone="demo"
+            onClick={() => handleSwitchAccount("DEMO")}
+            disabled={switching}
+          />
           <div className="bg-card border border-border rounded-xl p-6">
             <p className="text-xs uppercase tracking-wider text-muted-foreground">Conta ativa</p>
-            <p className="text-xl font-semibold mt-2">{accountType} · {formatMoney(activeBalance)}</p>
-            <p className="text-xs text-muted-foreground mt-3">Saldo sincronizado com a corretora.</p>
+            <p className="text-xl font-semibold mt-2">
+              {accountType} · {formatMoney(activeBalance)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-3">
+              Clique em uma conta acima para alternar na corretora.
+            </p>
           </div>
+        </section>
+
+        {tabAssets.length > 0 && (
+          <section className="bg-card border border-border rounded-xl p-6">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              Suas abas abertas
+            </h2>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {tabAssets.map((a) => (
+                <span
+                  key={a.id}
+                  className="text-xs px-3 py-1.5 rounded-full border border-border bg-background/60"
+                >
+                  {a.symbol} · <span className="text-muted-foreground">{a.name}</span>
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="grid gap-6 lg:grid-cols-2">
+          <TradesPanel
+            title="Operações em andamento"
+            empty="Sem operações abertas no momento."
+            trades={activeTrades}
+            showResult={false}
+          />
+          <TradesPanel
+            title="Histórico recente"
+            empty="Nenhuma operação no histórico."
+            trades={history}
+            showResult
+          />
         </section>
 
         <section className="bg-card border border-border rounded-xl p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h1 className="text-xl font-semibold">Ativos da corretora</h1>
-              <p className="text-sm text-muted-foreground mt-1">Lista sincronizada diretamente da plataforma.</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Lista sincronizada diretamente da plataforma.
+              </p>
             </div>
             <Button variant="outline" size="sm" onClick={refreshAssets} disabled={assetsLoading}>
               {assetsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Atualizar"}
@@ -159,12 +258,16 @@ function DashboardPage() {
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : assets.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-10">Nenhum ativo retornado pela corretora.</p>
+            <p className="text-sm text-muted-foreground py-10">
+              Nenhum ativo retornado pela corretora para esta conta.
+            </p>
           ) : (
             <div className="mt-6 space-y-6">
               {Object.entries(assetGroups).map(([group, list]) => (
                 <div key={group} className="space-y-3">
-                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{group}</h2>
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                    {group}
+                  </h2>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {list.map((item) => (
                       <AssetCard key={item.id} asset={item} />
@@ -180,6 +283,81 @@ function DashboardPage() {
   );
 }
 
+function TradesPanel({
+  title,
+  empty,
+  trades,
+  showResult,
+}: {
+  title: string;
+  empty: string;
+  trades: ABTrade[];
+  showResult: boolean;
+}) {
+  return (
+    <div className="bg-card border border-border rounded-xl p-6">
+      <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+        {title}
+      </h2>
+      {trades.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-8">{empty}</p>
+      ) : (
+        <ul className="mt-4 divide-y divide-border">
+          {trades.map((t) => {
+            const isCall = t.direction === "CALL";
+            const profit = Number(t.profit ?? 0);
+            const win = t.result === "WIN" || profit > 0;
+            const loss = t.result === "LOSS" || profit < 0;
+            return (
+              <li key={t.id} className="py-3 flex items-center justify-between gap-3 text-sm">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span
+                    className={`h-7 w-7 rounded-md flex items-center justify-center ${
+                      isCall ? "bg-bull/15 text-bull" : "bg-bear/15 text-bear"
+                    }`}
+                  >
+                    {isCall ? (
+                      <ArrowUpRight className="h-4 w-4" />
+                    ) : (
+                      <ArrowDownRight className="h-4 w-4" />
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">
+                      {t.asset?.symbol ?? "—"}{" "}
+                      <span className="text-xs text-muted-foreground">· {t.type ?? "—"}</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatTime(t.startTime)} → {formatTime(t.endTime)}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="tabular-nums">{formatMoney(Number(t.amount) || 0)}</p>
+                  {showResult ? (
+                    <p
+                      className={`text-xs tabular-nums ${
+                        win ? "text-bull" : loss ? "text-bear" : "text-muted-foreground"
+                      }`}
+                    >
+                      {win ? "+" : loss ? "" : ""}
+                      {formatMoney(profit)}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {t.status ?? "ACTIVE"} · {t.duration}s
+                    </p>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function AssetCard({ asset }: { asset: ABAsset }) {
   const price = Number(asset.lastPrice);
   return (
@@ -189,14 +367,20 @@ function AssetCard({ asset }: { asset: ABAsset }) {
           <h3 className="font-semibold">{asset.symbol}</h3>
           <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{asset.name}</p>
         </div>
-        <span className={`text-xs px-2 py-1 rounded-md ${asset.isOpen ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
+        <span
+          className={`text-xs px-2 py-1 rounded-md ${
+            asset.isOpen ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+          }`}
+        >
           {asset.isOpen ? "Aberto" : "Fechado"}
         </span>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <div>
           <p className="text-xs text-muted-foreground">Preço</p>
-          <p className="font-medium tabular-nums">{Number.isFinite(price) && price > 0 ? price : "—"}</p>
+          <p className="font-medium tabular-nums">
+            {Number.isFinite(price) && price > 0 ? price : "—"}
+          </p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Payout</p>
@@ -212,25 +396,32 @@ function BalanceCard({
   value,
   active,
   tone,
+  onClick,
+  disabled,
 }: {
   label: string;
   value: number;
   active: boolean;
   tone: "real" | "demo";
+  onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
-    <div
-      className={`rounded-xl border p-6 transition ${
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`text-left rounded-xl border p-6 transition disabled:opacity-60 ${
         active
           ? "border-primary/60 bg-card shadow-[0_0_0_1px_var(--primary)]"
-          : "border-border bg-card"
+          : "border-border bg-card hover:border-primary/40"
       }`}
     >
       <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
       <p className="text-3xl font-semibold mt-2 tabular-nums">{formatMoney(value)}</p>
       <p className={`text-xs mt-3 ${tone === "real" ? "text-bear" : "text-primary"}`}>
-        {tone === "real" ? "Capital real disponível" : "Saldo de prática"}
+        {active ? "Conta ativa" : "Clique para ativar"}
       </p>
-    </div>
+    </button>
   );
 }
