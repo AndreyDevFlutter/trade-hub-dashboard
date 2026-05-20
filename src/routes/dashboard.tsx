@@ -209,6 +209,8 @@ function DashboardPage() {
           </div>
         </section>
 
+        <TradePanel assets={assets} accountType={accountType} onPlaced={refreshTrades} />
+
         {tabAssets.length > 0 && (
           <section className="bg-card border border-border rounded-xl p-6">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
