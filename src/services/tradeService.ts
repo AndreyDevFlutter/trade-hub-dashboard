@@ -66,9 +66,6 @@ export const tradeService = {
       /* segue mesmo que falhe */
     }
 
-    // 2) Cria a operação — endpoint real: POST /orders
-    // payload: { asset, amount, direction: "Buy"|"Sell", timeFrame: "M1"|"M5"|"M15", entry_price? }
-    const direction = order.direction === "CALL" ? "Buy" : "Sell";
     const timeFrame =
       order.timeFrame ??
       (order.duration && order.duration >= 900
@@ -76,16 +73,22 @@ export const tradeService = {
         : order.duration && order.duration >= 300
           ? "M5"
           : "M1");
+    const duration = order.duration ?? (timeFrame === "M15" ? 900 : timeFrame === "M5" ? 300 : 60);
 
     const payload: Record<string, unknown> = {
-      asset: order.asset ?? order.assetId,
+      assetId: order.assetId,
       amount: order.amount,
-      direction,
-      timeFrame,
+      direction: order.direction,
+      duration,
+      settlementMode: "BINARY",
+      type: order.account_type,
+      leverage: "1",
+      usedBonusAmount: "0",
     };
+    if (order.accountId) payload.accountId = order.accountId;
     if (order.entryPrice != null) payload.entry_price = order.entryPrice;
 
-    const { data } = await api.post<ABOrderResp>("/orders", payload);
+    const { data } = await api.post<ABOrderResp>("/trading/create", payload);
 
     if (data.success === false) {
       throw new Error(data.message || "Falha ao criar ordem");
@@ -94,12 +97,7 @@ export const tradeService = {
     return {
       success: data.success ?? true,
       order_id:
-        data.orderId ??
-        data.id ??
-        data.trade?.id ??
-        data.data?.orderId ??
-        data.data?.id ??
-        "",
+        data.orderId ?? data.id ?? data.trade?.id ?? data.data?.orderId ?? data.data?.id ?? "",
       message: data.message ?? "Ordem enviada",
       new_balance: Number(data.balance ?? data.data?.balance ?? data.trade?.balance ?? 0),
       account_type: order.account_type,

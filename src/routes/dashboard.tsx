@@ -422,9 +422,10 @@ function TradePanel({
     }
     setSending(direction);
     try {
+      const selected = tradable.find((item) => item.id === asset);
       const res = await tradeService.sendOrder({
         assetId: asset,
-        asset,
+        asset: selected?.symbol ?? asset,
         accountId: "",
         direction,
         amount: amt,
@@ -466,7 +467,7 @@ function TradePanel({
           >
             {tradable.length === 0 && <option value="">Nenhum ativo aberto</option>}
             {tradable.map((a) => (
-              <option key={a.id} value={a.symbol}>
+              <option key={a.id} value={a.id}>
                 {a.symbol} · {a.payout}%
               </option>
             ))}
