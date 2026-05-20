@@ -16,6 +16,7 @@ import { Route as ApiProfileRouteImport } from './routes/api/profile'
 import { Route as ApiOrderRouteImport } from './routes/api/order'
 import { Route as ApiLoginRouteImport } from './routes/api/login'
 import { Route as ApiBalanceRouteImport } from './routes/api/balance'
+import { Route as ApiPricesSplatRouteImport } from './routes/api/prices.$'
 import { Route as ApiAbSplatRouteImport } from './routes/api/ab.$'
 
 const LoginRoute = LoginRouteImport.update({
@@ -53,6 +54,11 @@ const ApiBalanceRoute = ApiBalanceRouteImport.update({
   path: '/api/balance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPricesSplatRoute = ApiPricesSplatRouteImport.update({
+  id: '/api/prices/$',
+  path: '/api/prices/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAbSplatRoute = ApiAbSplatRouteImport.update({
   id: '/api/ab/$',
   path: '/api/ab/$',
@@ -68,6 +74,7 @@ export interface FileRoutesByFullPath {
   '/api/order': typeof ApiOrderRoute
   '/api/profile': typeof ApiProfileRoute
   '/api/ab/$': typeof ApiAbSplatRoute
+  '/api/prices/$': typeof ApiPricesSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByTo {
   '/api/order': typeof ApiOrderRoute
   '/api/profile': typeof ApiProfileRoute
   '/api/ab/$': typeof ApiAbSplatRoute
+  '/api/prices/$': typeof ApiPricesSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,6 +97,7 @@ export interface FileRoutesById {
   '/api/order': typeof ApiOrderRoute
   '/api/profile': typeof ApiProfileRoute
   '/api/ab/$': typeof ApiAbSplatRoute
+  '/api/prices/$': typeof ApiPricesSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,6 +110,7 @@ export interface FileRouteTypes {
     | '/api/order'
     | '/api/profile'
     | '/api/ab/$'
+    | '/api/prices/$'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -111,6 +121,7 @@ export interface FileRouteTypes {
     | '/api/order'
     | '/api/profile'
     | '/api/ab/$'
+    | '/api/prices/$'
   id:
     | '__root__'
     | '/'
@@ -121,6 +132,7 @@ export interface FileRouteTypes {
     | '/api/order'
     | '/api/profile'
     | '/api/ab/$'
+    | '/api/prices/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -132,6 +144,7 @@ export interface RootRouteChildren {
   ApiOrderRoute: typeof ApiOrderRoute
   ApiProfileRoute: typeof ApiProfileRoute
   ApiAbSplatRoute: typeof ApiAbSplatRoute
+  ApiPricesSplatRoute: typeof ApiPricesSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -185,6 +198,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiBalanceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/prices/$': {
+      id: '/api/prices/$'
+      path: '/api/prices/$'
+      fullPath: '/api/prices/$'
+      preLoaderRoute: typeof ApiPricesSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/ab/$': {
       id: '/api/ab/$'
       path: '/api/ab/$'
@@ -204,6 +224,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiOrderRoute: ApiOrderRoute,
   ApiProfileRoute: ApiProfileRoute,
   ApiAbSplatRoute: ApiAbSplatRoute,
+  ApiPricesSplatRoute: ApiPricesSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
