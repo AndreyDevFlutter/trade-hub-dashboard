@@ -268,6 +268,7 @@ function DashboardPage() {
         <TradePanel
           assets={assets}
           accountType={accountType}
+          accountId={accountType === "REAL" ? profile.account_id_real : profile.account_id_demo}
           onPlaced={refreshTrades}
           onBalanceRefresh={() => refreshAccount().catch(() => {})}
           onBalanceFromServer={(real, demo) => {
@@ -471,6 +472,7 @@ function AssetCard({ asset }: { asset: ABAsset }) {
 function TradePanel({
   assets,
   accountType,
+  accountId,
   onPlaced,
   onBalanceRefresh,
   onBalanceFromServer,
@@ -478,6 +480,7 @@ function TradePanel({
 }: {
   assets: ABAsset[];
   accountType: "REAL" | "DEMO";
+  accountId?: string | null;
   onPlaced: () => void;
   onBalanceRefresh?: () => void;
   onBalanceFromServer?: (real: number, demo: number) => void;
@@ -590,7 +593,8 @@ function TradePanel({
     try {
       const { data, error } = await supabase.functions.invoke("execute-action-trade", {
         body: {
-          asset,
+          assetId: asset,
+          accountId,
           amount: amt,
           direction,
           timeframe: timeFrame,
