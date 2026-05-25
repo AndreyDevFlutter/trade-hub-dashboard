@@ -188,21 +188,29 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     const message = brokerErrorMessage(err);
-    const safeToContinue =
-      message.toLowerCase().includes("já é do tipo") ||
-      message.toLowerCase().includes("trades ativos") ||
-      (err instanceof BrokerHttpError && err.status === 400);
-    if (!safeToContinue) {
+    const alreadyActive = message.toLowerCase().includes("já é do tipo");
+    const hasActiveTrades = message.toLowerCase().includes("trades ativos");
+    if (alreadyActive) {
+      // Already on the requested account type — safe to continue.
+      console.log("execute-action-trade: account already on", accountType);
+    } else if (hasActiveTrades) {
+      // CRITICAL: broker ignores accountId in payload and uses whichever
+      // account is currently active. If we can't switch, the order would
+      // go to the WRONG account silently. Block the request instead.
+      return json(
+        {
+          success: false,
+          message:
+            `Não foi possível mudar para conta ${accountType}: existem operações ativas na conta atual. Aguarde finalizarem e tente novamente.`,
+        },
+        409,
+      );
+    } else {
       return json(
         { success: false, message: `Falha ao ativar conta ${accountType}: ${message}` },
         502,
       );
     }
-    console.warn("execute-action-trade: continuing after account switch warning", {
-      userId: tokenRes.userId,
-      accountType,
-      message,
-    });
   }
 
   let accountId = body.accountId ?? undefined;
