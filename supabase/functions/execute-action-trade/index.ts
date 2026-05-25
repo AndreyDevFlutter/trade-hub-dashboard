@@ -98,18 +98,6 @@ function brokerErrorMessage(err: unknown) {
   return err instanceof Error ? err.message : "Erro desconhecido";
 }
 
-async function latestPriceForSymbol(symbol: string): Promise<number | null> {
-  const now = Math.floor(Date.now() / 1000);
-  const from = now - 180;
-  const url = `https://prices.actionbroker.app/history?symbol=${encodeURIComponent(symbol.toLowerCase())}&resolution=1&from=${from}&to=${now}`;
-  const response = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!response.ok) return null;
-  const data = await response.json().catch(() => null) as { c?: Array<number | string> } | null;
-  const closes = data?.c ?? [];
-  const price = Number(closes[closes.length - 1]);
-  return Number.isFinite(price) && price > 0 ? price : null;
-}
-
 async function getBrokerTokenForCaller(req: Request): Promise<
   { token: string; userId: string } | { error: string; status: number }
 > {
@@ -198,31 +186,16 @@ Deno.serve(async (req) => {
   }
 
   let accountId = body.accountId ?? undefined;
-  let symbol = body.asset ?? "";
-  let entryPrice: number | null = null;
   if (!accountId) {
     try {
       const me = await brokerJson("/api/auth/me", brokerToken);
       accountId = pickAccountId(me, accountType);
-    } catch { /* order may still work without accountId */ }
+    } catch { /* only used for trace; official order payload does not require it */ }
   }
-  try {
-    const assetInfo = await brokerJson(`/api/assets/asset/${encodeURIComponent(assetId)}`, brokerToken);
-    const assetPayload = (assetInfo.asset as Record<string, unknown> | undefined) ?? assetInfo;
-    symbol = String(pick(assetPayload, "symbol") ?? symbol ?? "");
-    const brokerLastPrice = Number(pick(assetPayload, "lastPrice", "price"));
-    entryPrice = Number.isFinite(brokerLastPrice) && brokerLastPrice > 0 ? brokerLastPrice : null;
-  } catch { /* fallback to price feed */ }
-  if (!entryPrice && symbol) entryPrice = await latestPriceForSymbol(symbol);
 
-  if (!symbol || !entryPrice) {
-    return json({ success: false, message: "Preço atual do ativo indisponível na corretora" }, 400);
-  }
   console.log("execute-action-trade: sending", {
     userId: tokenRes.userId,
-    assetId,
-    symbol,
-    entryPrice,
+    asset: assetId,
     amount,
     direction,
     timeframe,
@@ -231,19 +204,12 @@ Deno.serve(async (req) => {
   });
 
   const payload: Record<string, unknown> = {
-    assetId,
-    symbol,
+    asset: assetId,
     amount,
     direction,
-    price: entryPrice,
-    duration: durationFor(timeframe),
     method: "timeframe",
-    settlementMode: "BINARY",
-    type: accountType,
-    leverage: "1",
-    usedBonusAmount: "0",
+    expiryTime: durationFor(timeframe),
   };
-  if (accountId) payload.accountId = accountId;
 
   let upstream: Response;
   try {
