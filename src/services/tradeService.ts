@@ -32,8 +32,12 @@ export interface ActiveTrade {
 interface ABOrderResp {
   success?: boolean;
   message?: string;
+  trade_id?: string;
   orderId?: string;
   id?: string;
+  new_balance?: number;
+  new_balance_real?: number;
+  new_balance_demo?: number;
   trade?: { id?: string; accountId?: string; balance?: number | string };
   data?: { id?: string; orderId?: string; balance?: number };
   balance?: number;
@@ -89,9 +93,9 @@ export const tradeService = {
     return {
       success: data.success ?? true,
       order_id:
-        data.orderId ?? data.id ?? data.trade?.id ?? data.data?.orderId ?? data.data?.id ?? "",
+        data.trade_id ?? data.orderId ?? data.id ?? data.trade?.id ?? data.data?.orderId ?? data.data?.id ?? "",
       message: data.message ?? "Ordem enviada",
-      new_balance: Number(data.balance ?? data.data?.balance ?? data.trade?.balance ?? 0),
+      new_balance: Number(data.new_balance ?? data.balance ?? data.data?.balance ?? data.trade?.balance ?? 0),
       account_type: order.account_type,
     };
   },
