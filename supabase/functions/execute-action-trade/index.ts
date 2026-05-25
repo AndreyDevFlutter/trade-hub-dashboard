@@ -8,7 +8,7 @@ const BROKER_BASE = "https://api.actionbroker.app";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-broker-token",
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -42,13 +42,13 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ success: false, message: "Method not allowed" }, 405);
 
-  // Token do broker do usuário: header dedicado OU Authorization Bearer
-  const brokerToken =
-    req.headers.get("x-broker-token") ??
-    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
-    "";
+  // Token da corretora vem EXCLUSIVAMENTE do ambiente seguro do servidor.
+  const brokerToken = Deno.env.get("ACTION_BROKER_TOKEN");
   if (!brokerToken) {
-    return json({ success: false, message: "Sessão da corretora ausente" }, 401);
+    return json(
+      { success: false, message: "ACTION_BROKER_TOKEN ausente no servidor" },
+      500,
+    );
   }
 
   let body: TradeBody;
