@@ -148,18 +148,26 @@ Deno.serve(async (req) => {
   }
 
   try {
-    await fetch(`${BROKER_BASE}/api/users/change-account-type`, {
+    await brokerJson("/api/users/change-account-type", brokerToken, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${brokerToken}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
       body: JSON.stringify({ accountType }),
     });
-  } catch { /* best-effort */ }
+  } catch (err) {
+    return json(
+      { success: false, message: `Falha ao ativar conta ${accountType}: ${(err as Error).message}` },
+      502,
+    );
+  }
 
-  const payload = {
+  let accountId = body.accountId ?? undefined;
+  if (!accountId) {
+    try {
+      const me = await brokerJson("/api/auth/me", brokerToken);
+      accountId = pickAccountId(me, accountType);
+    } catch { /* order may still work without accountId */ }
+  }
+
+  const payload: Record<string, unknown> = {
     assetId,
     amount,
     direction,
@@ -169,6 +177,7 @@ Deno.serve(async (req) => {
     leverage: "1",
     usedBonusAmount: "0",
   };
+  if (accountId) payload.accountId = accountId;
 
   let upstream: Response;
   try {
@@ -200,11 +209,15 @@ Deno.serve(async (req) => {
 
   const trade = (data.trade as Record<string, unknown> | undefined) ?? undefined;
   const dataNested = (data.data as Record<string, unknown> | undefined) ?? undefined;
+  const order = (data.order as Record<string, unknown> | undefined) ?? undefined;
   const trade_id =
     (data.orderId as string) ??
+    (data.tradeId as string) ??
     (data.id as string) ??
     (trade?.id as string) ??
+    (trade?.orderId as string) ??
     (dataNested?.orderId as string) ??
+    (dataNested?.tradeId as string) ??
     (dataNested?.id as string) ?? "";
   const new_balance = Number(
     (data.balance as number | string | undefined) ??
@@ -218,5 +231,7 @@ Deno.serve(async (req) => {
     message: (data.message as string) ?? "Ordem enviada",
     new_balance,
     account_type: accountType,
+    account_id: accountId ?? null,
+    broker_trade: trade ?? order ?? dataNested ?? data,
   });
 });
