@@ -230,6 +230,7 @@ Deno.serve(async (req) => {
       const from = now - 300;
       const histRes = await fetch(
         `https://prices.actionbroker.app/history?symbol=${symbol}&resolution=1&from=${from}&to=${now}&countback=3`,
+        { headers: browserHeaders },
       );
       if (histRes.ok) {
         const hist = await histRes.json() as { c?: number[] };
