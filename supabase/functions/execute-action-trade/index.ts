@@ -277,6 +277,7 @@ Deno.serve(async (req) => {
         Authorization: `Bearer ${brokerToken}`,
         "Content-Type": "application/json",
         Accept: "application/json",
+        ...browserHeaders,
       },
       body: JSON.stringify(payload),
     });
