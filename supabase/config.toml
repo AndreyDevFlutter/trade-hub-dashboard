@@ -1,1 +1,4 @@
 project_id = "kxkkcuzfljbgehohdroj"
+
+[functions.execute-action-trade]
+verify_jwt = false
