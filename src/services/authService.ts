@@ -1,30 +1,44 @@
-import { api, setToken, clearToken } from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 
-export interface LoginPayload {
+export interface AuthCredentials {
   email: string;
   password: string;
 }
 
-interface ABLoginResponse {
-  success?: boolean;
-  message?: string;
-  token?: string;
-  data?: { token?: string; accessToken?: string };
-  accessToken?: string;
-}
-
 export const authService = {
-  async login(payload: LoginPayload): Promise<{ token: string }> {
-    const { data } = await api.post<ABLoginResponse>("/auth/login", payload);
-    const token =
-      data.token ?? data.accessToken ?? data.data?.token ?? data.data?.accessToken;
-    if (!token) {
-      throw new Error(data.message ?? "Resposta de login sem token");
-    }
-    setToken(token);
-    return { token };
+  async signUp({ email, password }: AuthCredentials) {
+    const redirectTo =
+      typeof window !== "undefined" ? `${window.location.origin}/dashboard` : undefined;
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: redirectTo },
+    });
+    if (error) throw error;
+    return data;
   },
-  logout() {
-    clearToken();
+  async signIn({ email, password }: AuthCredentials) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return data;
+  },
+  async signOut() {
+    await supabase.auth.signOut();
+  },
+  async connectBroker(payload: AuthCredentials & { account_type?: "REAL" | "DEMO" }) {
+    const { data: sess } = await supabase.auth.getSession();
+    const token = sess.session?.access_token;
+    if (!token) throw new Error("Sessão expirada — entre novamente.");
+    const res = await fetch("/api/connect-broker", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = (await res.json().catch(() => ({}))) as { message?: string; success?: boolean };
+    if (!res.ok) throw new Error(data.message ?? "Falha ao conectar corretora");
+    return data;
   },
 };

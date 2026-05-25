@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiProfileRouteImport } from './routes/api/profile'
 import { Route as ApiOrderRouteImport } from './routes/api/order'
 import { Route as ApiLoginRouteImport } from './routes/api/login'
+import { Route as ApiConnectBrokerRouteImport } from './routes/api/connect-broker'
 import { Route as ApiBalanceRouteImport } from './routes/api/balance'
 import { Route as ApiPricesSplatRouteImport } from './routes/api/prices.$'
 import { Route as ApiAbSplatRouteImport } from './routes/api/ab.$'
@@ -49,6 +50,11 @@ const ApiLoginRoute = ApiLoginRouteImport.update({
   path: '/api/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiConnectBrokerRoute = ApiConnectBrokerRouteImport.update({
+  id: '/api/connect-broker',
+  path: '/api/connect-broker',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiBalanceRoute = ApiBalanceRouteImport.update({
   id: '/api/balance',
   path: '/api/balance',
@@ -70,6 +76,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/api/balance': typeof ApiBalanceRoute
+  '/api/connect-broker': typeof ApiConnectBrokerRoute
   '/api/login': typeof ApiLoginRoute
   '/api/order': typeof ApiOrderRoute
   '/api/profile': typeof ApiProfileRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/api/balance': typeof ApiBalanceRoute
+  '/api/connect-broker': typeof ApiConnectBrokerRoute
   '/api/login': typeof ApiLoginRoute
   '/api/order': typeof ApiOrderRoute
   '/api/profile': typeof ApiProfileRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/api/balance': typeof ApiBalanceRoute
+  '/api/connect-broker': typeof ApiConnectBrokerRoute
   '/api/login': typeof ApiLoginRoute
   '/api/order': typeof ApiOrderRoute
   '/api/profile': typeof ApiProfileRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/api/balance'
+    | '/api/connect-broker'
     | '/api/login'
     | '/api/order'
     | '/api/profile'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/api/balance'
+    | '/api/connect-broker'
     | '/api/login'
     | '/api/order'
     | '/api/profile'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/api/balance'
+    | '/api/connect-broker'
     | '/api/login'
     | '/api/order'
     | '/api/profile'
@@ -140,6 +152,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
   ApiBalanceRoute: typeof ApiBalanceRoute
+  ApiConnectBrokerRoute: typeof ApiConnectBrokerRoute
   ApiLoginRoute: typeof ApiLoginRoute
   ApiOrderRoute: typeof ApiOrderRoute
   ApiProfileRoute: typeof ApiProfileRoute
@@ -191,6 +204,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/connect-broker': {
+      id: '/api/connect-broker'
+      path: '/api/connect-broker'
+      fullPath: '/api/connect-broker'
+      preLoaderRoute: typeof ApiConnectBrokerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/balance': {
       id: '/api/balance'
       path: '/api/balance'
@@ -220,6 +240,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
   ApiBalanceRoute: ApiBalanceRoute,
+  ApiConnectBrokerRoute: ApiConnectBrokerRoute,
   ApiLoginRoute: ApiLoginRoute,
   ApiOrderRoute: ApiOrderRoute,
   ApiProfileRoute: ApiProfileRoute,
