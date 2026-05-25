@@ -17,12 +17,6 @@ api.interceptors.request.use(async (config) => {
 
 api.interceptors.response.use(
   (r) => r,
-  async (err) => {
-    if (err?.response?.status === 401) {
-      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
-        window.location.href = "/login";
-      }
-    }
-    return Promise.reject(err);
-  },
+  async (err) => Promise.reject(err),
 );
+
