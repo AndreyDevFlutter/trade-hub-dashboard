@@ -5,6 +5,25 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const BROKER_BASE = "https://api.actionbroker.app";
+const BROKER_ORIGIN = "https://trade.actionbroker.app";
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+// Headers de navegador. Sem eles, a corretora marca a ordem como
+// isMarketing:true (trade não é liquidado, não vai pro portfólio,
+// não aparece em tempo real no gráfico).
+const browserHeaders: Record<string, string> = {
+  "User-Agent": BROWSER_UA,
+  Origin: BROKER_ORIGIN,
+  Referer: `${BROKER_ORIGIN}/pt/traderoom`,
+  "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+  "sec-ch-ua": '"Chromium";v="131", "Not_A Brand";v="24"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"Windows"',
+  "Sec-Fetch-Dest": "empty",
+  "Sec-Fetch-Mode": "cors",
+  "Sec-Fetch-Site": "same-site",
+};
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
