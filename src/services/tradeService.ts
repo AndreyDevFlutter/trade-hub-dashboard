@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import { supabase } from "@/integrations/supabase/client";
 
 export type Direction = "CALL" | "PUT";
 export type AccountType = "DEMO" | "REAL";
@@ -59,13 +60,6 @@ export const tradeService = {
   async sendOrder(
     order: OrderPayload & { asset?: string; timeFrame?: "M1" | "M5" | "M15"; entryPrice?: number },
   ): Promise<OrderResponse> {
-    // 1) Garante conta ativa (DEMO/REAL) via endpoint correto
-    try {
-      await api.post("/users/change-account-type", { accountType: order.account_type });
-    } catch {
-      /* segue mesmo que falhe */
-    }
-
     const timeFrame =
       order.timeFrame ??
       (order.duration && order.duration >= 900
@@ -73,22 +67,19 @@ export const tradeService = {
         : order.duration && order.duration >= 300
           ? "M5"
           : "M1");
-    const duration = order.duration ?? (timeFrame === "M15" ? 900 : timeFrame === "M5" ? 300 : 60);
 
-    const payload: Record<string, unknown> = {
-      assetId: order.assetId,
-      amount: order.amount,
-      direction: order.direction,
-      duration,
-      settlementMode: "BINARY",
-      type: order.account_type,
-      leverage: "1",
-      usedBonusAmount: "0",
-    };
-    if (order.accountId) payload.accountId = order.accountId;
-    if (order.entryPrice != null) payload.entry_price = order.entryPrice;
+    const { data, error } = await supabase.functions.invoke<ABOrderResp>("execute-action-trade", {
+      body: {
+        assetId: order.assetId,
+        accountId: order.accountId,
+        amount: order.amount,
+        direction: order.direction,
+        timeframe: timeFrame,
+        account_type: order.account_type,
+      },
+    });
 
-    const { data } = await api.post<ABOrderResp>("/trading/create", payload);
+    if (error) throw new Error(error.message || "Falha ao criar ordem");
 
     if (data.success === false) {
       throw new Error(data.message || "Falha ao criar ordem");
