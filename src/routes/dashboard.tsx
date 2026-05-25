@@ -155,11 +155,42 @@ function DashboardPage() {
     }, {});
   }, [assets]);
 
-  if (!profile) {
+  if (sessionLoading || !session) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <>
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4 text-center">
+          <Link2 className="h-10 w-10 text-primary" />
+          <h1 className="text-xl font-semibold">Conecte sua corretora</h1>
+          <p className="text-sm text-muted-foreground max-w-sm">
+            Para começar a operar, conecte sua conta da ActionBroker. O token fica
+            guardado no servidor — seu navegador nunca o vê.
+          </p>
+          <div className="flex gap-2">
+            <Button onClick={() => setConnectOpen(true)}>
+              <Link2 className="h-4 w-4 mr-1" /> Conectar corretora
+            </Button>
+            <Button variant="ghost" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-1" /> Sair
+            </Button>
+          </div>
+        </div>
+        <ConnectBrokerModal
+          open={connectOpen}
+          onOpenChange={setConnectOpen}
+          onConnected={() => {
+            setBrokerConnected(true);
+            refreshAccount(true).catch(() => {});
+          }}
+        />
+      </>
     );
   }
 
