@@ -80,6 +80,7 @@ export const tradeService = {
     });
 
     if (error) throw new Error(error.message || "Falha ao criar ordem");
+    if (!data) throw new Error("Resposta vazia da corretora");
 
     if (data.success === false) {
       throw new Error(data.message || "Falha ao criar ordem");
