@@ -324,6 +324,7 @@ Deno.serve(async (req) => {
   const trade = (data.trade as Record<string, unknown> | undefined) ?? undefined;
   const dataNested = (data.data as Record<string, unknown> | undefined) ?? undefined;
   const order = (data.order as Record<string, unknown> | undefined) ?? undefined;
+  const persistedTrade = trade ?? order ?? dataNested ?? data;
   const trade_id =
     (data.orderId as string) ??
     (data.tradeId as string) ??
@@ -333,14 +334,17 @@ Deno.serve(async (req) => {
     (dataNested?.orderId as string) ??
     (dataNested?.tradeId as string) ??
     (dataNested?.id as string) ?? "";
-  const new_balance = Number(
-    (data.balance as number | string | undefined) ??
-    (dataNested?.balance as number | string | undefined) ??
-    (trade?.balance as number | string | undefined) ?? 0,
-  );
+  const isMarketing = persistedTrade?.isMarketing === true;
+  const balances = await fetchBrokerBalances(brokerToken).catch((err) => {
+    console.warn("execute-action-trade: balance refresh failed", brokerErrorMessage(err));
+    return { real: 0, demo: 0, active: accountType };
+  });
   console.log("execute-action-trade: broker accepted", {
     trade_id,
     accountType,
+    isMarketing,
+    balanceReal: balances.real,
+    balanceDemo: balances.demo,
     hasAccountId: Boolean(accountId),
     keys: Object.keys(data),
   });
@@ -349,9 +353,15 @@ Deno.serve(async (req) => {
     success: true,
     trade_id,
     message: (data.message as string) ?? "Ordem enviada",
-    new_balance,
+    new_balance: accountType === "REAL" ? balances.real : balances.demo,
+    new_balance_real: balances.real,
+    new_balance_demo: balances.demo,
+    is_marketing: isMarketing,
+    warning: isMarketing
+      ? "A corretora aceitou a ordem como marketing; o painel da corretora pode não liquidar essa operação como real."
+      : null,
     account_type: accountType,
     account_id: accountId ?? null,
-    broker_trade: trade ?? order ?? dataNested ?? data,
+    broker_trade: persistedTrade,
   });
 });
