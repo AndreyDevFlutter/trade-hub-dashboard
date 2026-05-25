@@ -20,10 +20,20 @@ type AccountType = "DEMO" | "REAL";
 interface TradeBody {
   asset?: string;
   assetId?: string;
+  accountId?: string | null;
   amount?: number;
   direction?: Direction;
   timeframe?: TimeFrame;
   account_type?: AccountType;
+}
+
+function pick<T = unknown>(obj: Record<string, unknown> | undefined, ...keys: string[]): T | undefined {
+  if (!obj) return undefined;
+  for (const key of keys) {
+    const value = obj[key];
+    if (value !== undefined && value !== null && value !== "") return value as T;
+  }
+  return undefined;
 }
 
 function json(body: unknown, status = 200) {
@@ -37,6 +47,41 @@ function durationFor(tf: TimeFrame): number {
   if (tf === "M15") return 900;
   if (tf === "M5") return 300;
   return 60;
+}
+
+function pickAccountId(raw: Record<string, unknown>, accountType: AccountType): string | undefined {
+  const user = (raw.user as Record<string, unknown> | undefined) ?? raw;
+  const balances = user.balances as Record<string, Record<string, unknown>> | undefined;
+  const balanceAccount = accountType === "REAL" ? balances?.real : balances?.demo;
+  const fromBalance = pick<string>(balanceAccount, "id", "accountId");
+  if (fromBalance) return fromBalance;
+
+  const accounts = user.accounts as Array<Record<string, unknown>> | undefined;
+  const match = accounts?.find((account) => {
+    if (account.isTournament === true) return false;
+    const isDemo = account.isDemo === true || String(account.type ?? "").toUpperCase() === "DEMO";
+    return accountType === "DEMO" ? isDemo : !isDemo;
+  });
+  return pick<string>(match, "id", "accountId");
+}
+
+async function brokerJson(path: string, token: string, init?: RequestInit): Promise<Record<string, unknown>> {
+  const response = await fetch(`${BROKER_BASE}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...(init?.headers ?? {}),
+    },
+  });
+  const text = await response.text();
+  let data: Record<string, unknown> = {};
+  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+  if (!response.ok) {
+    throw new Error(String(data.message ?? data.error ?? `ActionBroker ${response.status}`));
+  }
+  return data;
 }
 
 async function getBrokerTokenForCaller(req: Request): Promise<
