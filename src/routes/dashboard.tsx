@@ -1,11 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { LogOut, TrendingUp, Wifi, Loader2, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { LogOut, TrendingUp, Wifi, Loader2, ArrowUpRight, ArrowDownRight, Link2 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { userService } from "@/services/userService";
 import { authService } from "@/services/authService";
 import { supabase } from "@/integrations/supabase/client";
+import { useSession } from "@/hooks/use-session";
+import { ConnectBrokerModal } from "@/components/ConnectBrokerModal";
 import {
   actionbrokerService,
   type ABAsset,
