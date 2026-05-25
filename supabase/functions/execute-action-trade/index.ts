@@ -98,18 +98,6 @@ function brokerErrorMessage(err: unknown) {
   return err instanceof Error ? err.message : "Erro desconhecido";
 }
 
-async function latestPriceForSymbol(symbol: string): Promise<number | null> {
-  const now = Math.floor(Date.now() / 1000);
-  const from = now - 180;
-  const url = `https://prices.actionbroker.app/history?symbol=${encodeURIComponent(symbol.toLowerCase())}&resolution=1&from=${from}&to=${now}`;
-  const response = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!response.ok) return null;
-  const data = await response.json().catch(() => null) as { c?: Array<number | string> } | null;
-  const closes = data?.c ?? [];
-  const price = Number(closes[closes.length - 1]);
-  return Number.isFinite(price) && price > 0 ? price : null;
-}
-
 async function getBrokerTokenForCaller(req: Request): Promise<
   { token: string; userId: string } | { error: string; status: number }
 > {
