@@ -100,6 +100,7 @@ async function brokerJson(path: string, token: string, init?: RequestInit): Prom
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
+      ...browserHeaders,
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...(init?.headers ?? {}),
     },
