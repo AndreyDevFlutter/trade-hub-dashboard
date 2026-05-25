@@ -1,7 +1,8 @@
-// Edge Function: execute-action-trade
-// Single Source of Truth para envio de ordens à corretora ActionBroker.
-// O front-end NÃO calcula saldo. Esta função valida o input, executa a ordem
-// no broker e devolve { success, trade_id, message, new_balance? }.
+// Edge Function: execute-action-trade (multi-tenant)
+// Lê o JWT do Supabase Auth no header, busca o broker_token do usuário em
+// public.broker_connections e despacha a ordem para a ActionBroker.
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const BROKER_BASE = "https://api.actionbroker.app";
 
@@ -17,7 +18,7 @@ type TimeFrame = "M1" | "M5" | "M15";
 type AccountType = "DEMO" | "REAL";
 
 interface TradeBody {
-  asset?: string;          // assetId (UUID)
+  asset?: string;
   assetId?: string;
   amount?: number;
   direction?: Direction;
@@ -38,18 +39,45 @@ function durationFor(tf: TimeFrame): number {
   return 60;
 }
 
+async function getBrokerTokenForCaller(req: Request): Promise<
+  { token: string; userId: string } | { error: string; status: number }
+> {
+  const authHeader = req.headers.get("Authorization") ?? "";
+  if (!authHeader.startsWith("Bearer ")) {
+    return { error: "Unauthorized", status: 401 };
+  }
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const SUPABASE_ANON = Deno.env.get("SUPABASE_ANON_KEY") ??
+    Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!;
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr || !userData.user) {
+    return { error: "Unauthorized", status: 401 };
+  }
+  const userId = userData.user.id;
+  const { data, error } = await supabase
+    .from("broker_connections")
+    .select("broker_token")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) return { error: error.message, status: 500 };
+  if (!data?.broker_token) {
+    return { error: "Conecte sua corretora primeiro", status: 401 };
+  }
+  return { token: data.broker_token as string, userId };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ success: false, message: "Method not allowed" }, 405);
 
-  // Token da corretora vem EXCLUSIVAMENTE do ambiente seguro do servidor.
-  const brokerToken = Deno.env.get("ACTION_BROKER_TOKEN");
-  if (!brokerToken) {
-    return json(
-      { success: false, message: "ACTION_BROKER_TOKEN ausente no servidor" },
-      500,
-    );
+  const tokenRes = await getBrokerTokenForCaller(req);
+  if ("error" in tokenRes) {
+    return json({ success: false, message: tokenRes.error }, tokenRes.status);
   }
+  const brokerToken = tokenRes.token;
 
   let body: TradeBody;
   try {
@@ -74,7 +102,6 @@ Deno.serve(async (req) => {
     return json({ success: false, message: "Timeframe inválido" }, 400);
   }
 
-  // Garante conta ativa (best-effort, não bloqueia se falhar)
   try {
     await fetch(`${BROKER_BASE}/api/users/change-account-type`, {
       method: "POST",
@@ -85,9 +112,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({ accountType }),
     });
-  } catch {
-    /* segue */
-  }
+  } catch { /* best-effort */ }
 
   const payload = {
     assetId,
@@ -120,11 +145,7 @@ Deno.serve(async (req) => {
 
   const text = await upstream.text();
   let data: Record<string, unknown> = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = { raw: text };
-  }
+  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
 
   if (!upstream.ok) {
     const message =
@@ -139,13 +160,11 @@ Deno.serve(async (req) => {
     (data.id as string) ??
     (trade?.id as string) ??
     (dataNested?.orderId as string) ??
-    (dataNested?.id as string) ??
-    "";
+    (dataNested?.id as string) ?? "";
   const new_balance = Number(
     (data.balance as number | string | undefined) ??
-      (dataNested?.balance as number | string | undefined) ??
-      (trade?.balance as number | string | undefined) ??
-      0,
+    (dataNested?.balance as number | string | undefined) ??
+    (trade?.balance as number | string | undefined) ?? 0,
   );
 
   return json({
