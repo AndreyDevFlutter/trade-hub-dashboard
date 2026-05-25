@@ -3,32 +3,32 @@ import { persist } from "zustand/middleware";
 import type { Profile } from "@/services/userService";
 import type { AccountType } from "@/services/tradeService";
 
-interface AuthState {
-  token: string | null;
+interface AppState {
   profile: Profile | null;
   accountType: AccountType;
-  setToken: (t: string | null) => void;
+  brokerConnected: boolean;
   setProfile: (p: Profile | null) => void;
   setAccountType: (t: AccountType) => void;
+  setBrokerConnected: (v: boolean) => void;
   updateBalance: (real: number, demo: number) => void;
-  logout: () => void;
+  reset: () => void;
 }
 
-export const useAuthStore = create<AuthState>()(
+export const useAuthStore = create<AppState>()(
   persist(
     (set) => ({
-      token: null,
       profile: null,
       accountType: "DEMO",
-      setToken: (token) => set({ token }),
+      brokerConnected: false,
       setProfile: (profile) => set({ profile }),
       setAccountType: (accountType) => set({ accountType }),
+      setBrokerConnected: (brokerConnected) => set({ brokerConnected }),
       updateBalance: (balance_real, balance_demo) =>
         set((s) => ({
           profile: s.profile ? { ...s.profile, balance_real, balance_demo } : s.profile,
         })),
-      logout: () => set({ token: null, profile: null }),
+      reset: () => set({ profile: null, brokerConnected: false }),
     }),
-    { name: "trader-auth" },
+    { name: "trader-app" },
   ),
 );

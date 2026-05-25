@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { TrendingUp, ArrowRight, Shield, RefreshCw, LineChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAuthStore } from "@/store/authStore";
+import { useSession } from "@/hooks/use-session";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -20,10 +20,10 @@ export const Route = createFileRoute("/")({
 
 function Landing() {
   const navigate = useNavigate();
-  const token = useAuthStore((s) => s.token);
+  const { session } = useSession();
   useEffect(() => {
-    if (token) navigate({ to: "/dashboard" });
-  }, [token, navigate]);
+    if (session) navigate({ to: "/dashboard" });
+  }, [session, navigate]);
 
   return (
     <main className="min-h-screen">

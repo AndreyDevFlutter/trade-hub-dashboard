@@ -1,32 +1,22 @@
 import axios from "axios";
-
-const TOKEN_KEY = "trader_token";
-
-export const getToken = () =>
-  typeof window === "undefined" ? null : localStorage.getItem(TOKEN_KEY);
-export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
-export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+import { supabase } from "@/integrations/supabase/client";
 
 export const api = axios.create({
   baseURL: "/api/ab",
   headers: { "Content-Type": "application/json" },
 });
 
-api.interceptors.request.use((config) => {
-  const token = getToken();
+// Anexa o JWT do Supabase Auth (NUNCA o token da corretora).
+// O proxy /api/ab valida o JWT e injeta o broker_token server-side.
+api.interceptors.request.use(async (config) => {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
 api.interceptors.response.use(
   (r) => r,
-  (err) => {
-    if (err?.response?.status === 401) {
-      clearToken();
-      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
-        window.location.href = "/login";
-      }
-    }
-    return Promise.reject(err);
-  },
+  async (err) => Promise.reject(err),
 );
+

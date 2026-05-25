@@ -1,11 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { LogOut, TrendingUp, Wifi, Loader2, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { LogOut, TrendingUp, Wifi, Loader2, ArrowUpRight, ArrowDownRight, Link2 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { userService } from "@/services/userService";
 import { authService } from "@/services/authService";
 import { supabase } from "@/integrations/supabase/client";
+import { useSession } from "@/hooks/use-session";
+import { ConnectBrokerModal } from "@/components/ConnectBrokerModal";
 import {
   actionbrokerService,
   type ABAsset,
@@ -41,7 +43,8 @@ function formatTime(iso?: string) {
 
 function DashboardPage() {
   const navigate = useNavigate();
-  const { token, profile, accountType, setAccountType, setProfile, logout } = useAuthStore();
+  const { session, loading: sessionLoading } = useSession();
+  const { profile, accountType, brokerConnected, setAccountType, setProfile, setBrokerConnected, reset } = useAuthStore();
   const [assets, setAssets] = useState<ABAsset[]>([]);
   const [tabs, setTabs] = useState<ABTab[]>([]);
   const [activeTrades, setActiveTrades] = useState<ABTrade[]>([]);
@@ -49,6 +52,7 @@ function DashboardPage() {
   const [assetsLoading, setAssetsLoading] = useState(true);
   const [online, setOnline] = useState<number | null>(null);
   const [switching, setSwitching] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
 
   async function refreshAccount(syncAccountType = false) {
     const freshProfile = await userService.getProfile();
@@ -98,31 +102,39 @@ function DashboardPage() {
   }
 
   useEffect(() => {
+    if (!session) return;
     refreshAssets();
     refreshTrades();
     actionbrokerService.onlineUsers().then(setOnline).catch(() => {});
-  }, []);
+  }, [session, brokerConnected]);
 
   useEffect(() => {
-    if (!token) {
+    if (sessionLoading) return;
+    if (!session) {
       navigate({ to: "/login" });
       return;
     }
-    refreshAccount(true).catch(() => {
-      toast.error("Falha ao carregar perfil");
-      logout();
-      navigate({ to: "/login" });
+    refreshAccount(true).then(() => {
+      setBrokerConnected(true);
+    }).catch((err: unknown) => {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401) {
+        setBrokerConnected(false);
+        setConnectOpen(true);
+      } else {
+        toast.error("Falha ao carregar perfil");
+      }
     });
     const interval = window.setInterval(() => {
       refreshAccount().catch(() => {});
       refreshTrades().catch(() => {});
     }, 5000);
     return () => window.clearInterval(interval);
-  }, [token, navigate, setAccountType, setProfile, logout]);
+  }, [session, sessionLoading, navigate, setAccountType, setProfile, setBrokerConnected]);
 
-  function handleLogout() {
-    authService.logout();
-    logout();
+  async function handleLogout() {
+    await authService.signOut();
+    reset();
     navigate({ to: "/login" });
   }
 
@@ -143,11 +155,42 @@ function DashboardPage() {
     }, {});
   }, [assets]);
 
-  if (!profile) {
+  if (sessionLoading || !session) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <>
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4 text-center">
+          <Link2 className="h-10 w-10 text-primary" />
+          <h1 className="text-xl font-semibold">Conecte sua corretora</h1>
+          <p className="text-sm text-muted-foreground max-w-sm">
+            Para começar a operar, conecte sua conta da ActionBroker. O token fica
+            guardado no servidor — seu navegador nunca o vê.
+          </p>
+          <div className="flex gap-2">
+            <Button onClick={() => setConnectOpen(true)}>
+              <Link2 className="h-4 w-4 mr-1" /> Conectar corretora
+            </Button>
+            <Button variant="ghost" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-1" /> Sair
+            </Button>
+          </div>
+        </div>
+        <ConnectBrokerModal
+          open={connectOpen}
+          onOpenChange={setConnectOpen}
+          onConnected={() => {
+            setBrokerConnected(true);
+            refreshAccount(true).catch(() => {});
+          }}
+        />
+      </>
     );
   }
 
@@ -172,6 +215,10 @@ function DashboardPage() {
               </Avatar>
               <span className="text-sm hidden sm:inline">{profile.name}</span>
             </div>
+            <Button variant="outline" size="sm" onClick={() => setConnectOpen(true)}>
+              <Link2 className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1">Corretora</span>
+            </Button>
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline ml-1">Sair</span>
@@ -179,6 +226,15 @@ function DashboardPage() {
           </div>
         </div>
       </header>
+      <ConnectBrokerModal
+        open={connectOpen}
+        onOpenChange={setConnectOpen}
+        onConnected={() => {
+          setBrokerConnected(true);
+          refreshAccount(true).catch(() => {});
+        }}
+      />
+
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         <section className="grid gap-4 md:grid-cols-3">

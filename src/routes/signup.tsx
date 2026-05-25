@@ -8,19 +8,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TrendingUp, Loader2 } from "lucide-react";
 
-export const Route = createFileRoute("/login")({
+export const Route = createFileRoute("/signup")({
   head: () => ({
     meta: [
-      { title: "Entrar — TraderHub" },
-      { name: "description", content: "Acesse sua conta TraderHub." },
+      { title: "Criar conta — TraderHub" },
+      { name: "description", content: "Crie sua conta no TraderHub." },
     ],
   }),
-  component: LoginPage,
+  component: SignupPage,
 });
 
-function LoginPage() {
+function SignupPage() {
   const navigate = useNavigate();
-  const { session, loading: loadingSession } = useSession();
+  const { session } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -31,24 +31,27 @@ function LoginPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (password.length < 6) {
+      toast.error("Senha precisa ter pelo menos 6 caracteres");
+      return;
+    }
     setLoading(true);
     try {
-      await authService.signIn({ email, password });
-      toast.success("Login realizado com sucesso");
-      navigate({ to: "/dashboard" });
-    } catch (err: unknown) {
-      toast.error((err as Error)?.message ?? "Falha ao autenticar");
+      const result = await authService.signUp({ email, password });
+      if (result.session) {
+        toast.success("Conta criada! Você já está logado.");
+        navigate({ to: "/dashboard" });
+      } else {
+        toast.success(
+          "Conta criada — verifique seu email para confirmar antes de entrar.",
+        );
+        navigate({ to: "/login" });
+      }
+    } catch (err) {
+      toast.error((err as Error)?.message ?? "Falha ao criar conta");
     } finally {
       setLoading(false);
     }
-  }
-
-  if (loadingSession) {
-    return (
-      <main className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </main>
-    );
   }
 
   return (
@@ -59,9 +62,9 @@ function LoginPage() {
           <span className="text-xl font-semibold tracking-tight">TraderHub</span>
         </Link>
         <div className="bg-card border border-border rounded-xl p-8 shadow-2xl">
-          <h1 className="text-2xl font-semibold">Entrar na plataforma</h1>
+          <h1 className="text-2xl font-semibold">Criar conta</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Use sua conta TraderHub. A conexão com a corretora é feita depois do login.
+            Esta é sua conta TraderHub. Você conectará a corretora depois.
           </p>
 
           <form onSubmit={onSubmit} className="space-y-4 mt-6">
@@ -81,7 +84,8 @@ function LoginPage() {
               <Input
                 id="password"
                 type="password"
-                autoComplete="current-password"
+                autoComplete="new-password"
+                minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -90,18 +94,18 @@ function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Entrando...
+                  <Loader2 className="h-4 w-4 animate-spin" /> Criando...
                 </>
               ) : (
-                "Entrar"
+                "Criar conta"
               )}
             </Button>
           </form>
 
           <p className="text-xs text-muted-foreground mt-6 text-center">
-            Ainda não tem conta?{" "}
-            <Link to="/signup" className="text-primary hover:underline">
-              Cadastre-se
+            Já tem conta?{" "}
+            <Link to="/login" className="text-primary hover:underline">
+              Entrar
             </Link>
           </p>
         </div>

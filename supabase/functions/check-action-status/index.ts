@@ -1,6 +1,8 @@
-// Edge Function: check-action-status
-// Consulta o resultado final de uma ordem na ActionBroker.
-// Token da corretora SEMPRE vem do ambiente seguro (Deno.env), nunca do client.
+// Edge Function: check-action-status (multi-tenant)
+// Lê o JWT do Supabase Auth, busca o broker_token do usuário em
+// public.broker_connections e consulta o status da ordem na ActionBroker.
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const BROKER_BASE = "https://api.actionbroker.app";
 
@@ -57,7 +59,6 @@ async function fetchTradeById(tradeId: string, token: string): Promise<Record<st
       if (trade && (trade as { id?: string }).id) return trade;
     }
   } catch { /* fallback */ }
-
   try {
     const r = await brokerGet(`/api/trading/history?page=1&limit=50`, token);
     if (r.ok) {
@@ -71,7 +72,6 @@ async function fetchTradeById(tradeId: string, token: string): Promise<Record<st
       if (found) return found;
     }
   } catch { /* fallback */ }
-
   try {
     const r = await brokerGet(`/api/trading/active`, token);
     if (r.ok) {
@@ -85,7 +85,6 @@ async function fetchTradeById(tradeId: string, token: string): Promise<Record<st
       if (found) return found;
     }
   } catch { /* fallback */ }
-
   return null;
 }
 
@@ -95,42 +94,72 @@ async function fetchBalances(token: string): Promise<{ real: number; demo: numbe
     if (r.ok) {
       const j = await r.json() as Record<string, unknown>;
       const user = (j.user as Record<string, unknown>) ?? j;
-      const real = Number(pick(user, "balanceReal", "balance_real", "realBalance") ?? 0);
-      const demo = Number(pick(user, "balanceDemo", "balance_demo", "demoBalance") ?? 0);
+      const balances = (user.balances as { real?: Record<string, unknown>; demo?: Record<string, unknown> }) ?? {};
+      const real = Number(
+        pick(balances.real, "available", "balance") ??
+        pick(user, "balanceReal", "balance_real", "realBalance") ?? 0,
+      );
+      const demo = Number(
+        pick(balances.demo, "available", "balance") ??
+        pick(user, "balanceDemo", "balance_demo", "demoBalance") ?? 0,
+      );
       const accountType = (String(pick(user, "accountType", "account_type") ?? "DEMO").toUpperCase() === "REAL")
-        ? "REAL"
-        : "DEMO";
+        ? "REAL" : "DEMO";
       return { real, demo, accountType };
     }
   } catch { /* ignore */ }
   return { real: 0, demo: 0, accountType: "DEMO" };
 }
 
+async function getBrokerTokenForCaller(req: Request): Promise<
+  { token: string; userId: string } | { error: string; status: number }
+> {
+  const authHeader = req.headers.get("Authorization") ?? "";
+  if (!authHeader.startsWith("Bearer ")) {
+    return { error: "Unauthorized", status: 401 };
+  }
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const SUPABASE_ANON = Deno.env.get("SUPABASE_ANON_KEY") ??
+    Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!;
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr || !userData.user) {
+    return { error: "Unauthorized", status: 401 };
+  }
+  const userId = userData.user.id;
+  const { data, error } = await supabase
+    .from("broker_connections")
+    .select("broker_token")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) return { error: error.message, status: 500 };
+  if (!data?.broker_token) {
+    return { error: "Conecte sua corretora primeiro", status: 401 };
+  }
+  return { token: data.broker_token as string, userId };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ success: false, message: "Method not allowed" }, 405);
 
-  const brokerToken = Deno.env.get("ACTION_BROKER_TOKEN");
-  if (!brokerToken) {
-    return json(
-      { success: false, message: "ACTION_BROKER_TOKEN ausente no servidor" },
-      500,
-    );
+  const tokenRes = await getBrokerTokenForCaller(req);
+  if ("error" in tokenRes) {
+    return json({ success: false, message: tokenRes.error }, tokenRes.status);
   }
+  const brokerToken = tokenRes.token;
 
   let body: { trade_id?: string };
-  try {
-    body = await req.json();
-  } catch {
+  try { body = await req.json(); } catch {
     return json({ success: false, message: "JSON inválido" }, 400);
   }
   const tradeId = String(body.trade_id ?? "").trim();
   if (!tradeId) return json({ success: false, message: "trade_id obrigatório" }, 400);
 
   const trade = await fetchTradeById(tradeId, brokerToken);
-  if (!trade) {
-    return json({ success: true, status: "PENDING" as Status });
-  }
+  if (!trade) return json({ success: true, status: "PENDING" as Status });
 
   const amount = Number(pick(trade, "amount") ?? 0);
   const profit = Number(pick(trade, "profit", "pnl", "payoutAmount") ?? 0);
@@ -138,9 +167,7 @@ Deno.serve(async (req) => {
   const rawStatus = pick(trade, "result", "status");
   const status = normalizeStatus(rawStatus, profit);
 
-  if (status === "PENDING") {
-    return json({ success: true, status, trade });
-  }
+  if (status === "PENDING") return json({ success: true, status, trade });
 
   const balances = await fetchBalances(brokerToken);
 
