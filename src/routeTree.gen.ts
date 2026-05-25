@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
@@ -20,6 +21,11 @@ import { Route as ApiBalanceRouteImport } from './routes/api/balance'
 import { Route as ApiPricesSplatRouteImport } from './routes/api/prices.$'
 import { Route as ApiAbSplatRouteImport } from './routes/api/ab.$'
 
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -75,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
   '/api/balance': typeof ApiBalanceRoute
   '/api/connect-broker': typeof ApiConnectBrokerRoute
   '/api/login': typeof ApiLoginRoute
@@ -87,6 +94,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
   '/api/balance': typeof ApiBalanceRoute
   '/api/connect-broker': typeof ApiConnectBrokerRoute
   '/api/login': typeof ApiLoginRoute
@@ -100,6 +108,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
   '/api/balance': typeof ApiBalanceRoute
   '/api/connect-broker': typeof ApiConnectBrokerRoute
   '/api/login': typeof ApiLoginRoute
@@ -114,6 +123,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/login'
+    | '/signup'
     | '/api/balance'
     | '/api/connect-broker'
     | '/api/login'
@@ -126,6 +136,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/login'
+    | '/signup'
     | '/api/balance'
     | '/api/connect-broker'
     | '/api/login'
@@ -138,6 +149,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/login'
+    | '/signup'
     | '/api/balance'
     | '/api/connect-broker'
     | '/api/login'
@@ -151,6 +163,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
+  SignupRoute: typeof SignupRoute
   ApiBalanceRoute: typeof ApiBalanceRoute
   ApiConnectBrokerRoute: typeof ApiConnectBrokerRoute
   ApiLoginRoute: typeof ApiLoginRoute
@@ -162,6 +175,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -239,6 +259,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
+  SignupRoute: SignupRoute,
   ApiBalanceRoute: ApiBalanceRoute,
   ApiConnectBrokerRoute: ApiConnectBrokerRoute,
   ApiLoginRoute: ApiLoginRoute,
@@ -250,3 +271,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
