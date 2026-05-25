@@ -179,22 +179,50 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ accountType }),
     });
   } catch (err) {
-    return json(
-      { success: false, message: `Falha ao ativar conta ${accountType}: ${(err as Error).message}` },
-      502,
-    );
+    const message = brokerErrorMessage(err);
+    const safeToContinue =
+      message.toLowerCase().includes("já é do tipo") ||
+      message.toLowerCase().includes("trades ativos") ||
+      (err instanceof BrokerHttpError && err.status === 400);
+    if (!safeToContinue) {
+      return json(
+        { success: false, message: `Falha ao ativar conta ${accountType}: ${message}` },
+        502,
+      );
+    }
+    console.warn("execute-action-trade: continuing after account switch warning", {
+      userId: tokenRes.userId,
+      accountType,
+      message,
+    });
   }
 
   let accountId = body.accountId ?? undefined;
+  let symbol = body.asset ?? "";
+  let entryPrice: number | null = null;
   if (!accountId) {
     try {
       const me = await brokerJson("/api/auth/me", brokerToken);
       accountId = pickAccountId(me, accountType);
     } catch { /* order may still work without accountId */ }
   }
+  try {
+    const assetInfo = await brokerJson(`/api/assets/asset/${encodeURIComponent(assetId)}`, brokerToken);
+    const assetPayload = (assetInfo.asset as Record<string, unknown> | undefined) ?? assetInfo;
+    symbol = String(pick(assetPayload, "symbol") ?? symbol ?? "");
+    const brokerLastPrice = Number(pick(assetPayload, "lastPrice", "price"));
+    entryPrice = Number.isFinite(brokerLastPrice) && brokerLastPrice > 0 ? brokerLastPrice : null;
+  } catch { /* fallback to price feed */ }
+  if (!entryPrice && symbol) entryPrice = await latestPriceForSymbol(symbol);
+
+  if (!symbol || !entryPrice) {
+    return json({ success: false, message: "Preço atual do ativo indisponível na corretora" }, 400);
+  }
   console.log("execute-action-trade: sending", {
     userId: tokenRes.userId,
     assetId,
+    symbol,
+    entryPrice,
     amount,
     direction,
     timeframe,
@@ -204,9 +232,12 @@ Deno.serve(async (req) => {
 
   const payload: Record<string, unknown> = {
     assetId,
+    symbol,
     amount,
     direction,
+    price: entryPrice,
     duration: durationFor(timeframe),
+    method: "timeframe",
     settlementMode: "BINARY",
     type: accountType,
     leverage: "1",
