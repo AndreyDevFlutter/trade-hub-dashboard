@@ -66,10 +66,21 @@ function normalizeStatus(raw: unknown, profit: number): Status {
   return "PENDING";
 }
 
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+const BROKER_ORIGIN = "https://trade.actionbroker.app";
+
 async function brokerGet(path: string, token: string) {
   return fetch(`${BROKER_BASE}${path}`, {
     method: "GET",
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      "User-Agent": BROWSER_UA,
+      Origin: BROKER_ORIGIN,
+      Referer: `${BROKER_ORIGIN}/pt/traderoom`,
+      "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+    },
   });
 }
 
