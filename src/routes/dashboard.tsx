@@ -287,6 +287,7 @@ function DashboardPage() {
           onBalanceRefresh={() => refreshAccount().catch(() => {})}
           onBalanceFromServer={(real, demo) => {
             if (!profile) return;
+            // Only mirror balances fetched back from the broker, never a locally calculated debit.
             setProfile({ ...profile, balance_real: real, balance_demo: demo });
           }}
           onTradeResolved={(trade) => {
@@ -625,6 +626,20 @@ function TradePanel({
       const tradeId = String(data.trade_id ?? "");
       toast.success(tradeId ? `Ordem enviada · ${tradeId}` : "Ordem enviada");
       onPlaced();
+      if (
+        onBalanceFromServer &&
+        Number.isFinite(Number(data.new_balance_real)) &&
+        Number.isFinite(Number(data.new_balance_demo))
+      ) {
+        onBalanceFromServer(Number(data.new_balance_real), Number(data.new_balance_demo));
+      } else {
+        onBalanceRefresh?.();
+      }
+      if (data.is_marketing) {
+        toast.warning(
+          "Conta marketing detectada: a corretora registra no histórico, mas não liquida como saldo/portfólio real.",
+        );
+      }
 
       if (!tradeId) {
         // Sem id não há como consultar — libera UI
