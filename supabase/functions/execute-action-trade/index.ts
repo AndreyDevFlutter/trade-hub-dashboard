@@ -17,6 +17,16 @@ type Direction = "CALL" | "PUT";
 type TimeFrame = "M1" | "M5" | "M15";
 type AccountType = "DEMO" | "REAL";
 
+class BrokerHttpError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "BrokerHttpError";
+    this.status = status;
+  }
+}
+
 interface TradeBody {
   asset?: string;
   assetId?: string;
@@ -79,9 +89,25 @@ async function brokerJson(path: string, token: string, init?: RequestInit): Prom
   let data: Record<string, unknown> = {};
   try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
   if (!response.ok) {
-    throw new Error(String(data.message ?? data.error ?? `ActionBroker ${response.status}`));
+    throw new BrokerHttpError(String(data.message ?? data.error ?? `ActionBroker ${response.status}`), response.status);
   }
   return data;
+}
+
+function brokerErrorMessage(err: unknown) {
+  return err instanceof Error ? err.message : "Erro desconhecido";
+}
+
+async function latestPriceForSymbol(symbol: string): Promise<number | null> {
+  const now = Math.floor(Date.now() / 1000);
+  const from = now - 180;
+  const url = `https://prices.actionbroker.app/history?symbol=${encodeURIComponent(symbol.toLowerCase())}&resolution=1&from=${from}&to=${now}`;
+  const response = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!response.ok) return null;
+  const data = await response.json().catch(() => null) as { c?: Array<number | string> } | null;
+  const closes = data?.c ?? [];
+  const price = Number(closes[closes.length - 1]);
+  return Number.isFinite(price) && price > 0 ? price : null;
 }
 
 async function getBrokerTokenForCaller(req: Request): Promise<
