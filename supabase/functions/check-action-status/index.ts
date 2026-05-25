@@ -118,11 +118,11 @@ async function fetchBalances(token: string): Promise<{ real: number; demo: numbe
       const user = (j.user as Record<string, unknown>) ?? j;
       const balances = (user.balances as { real?: Record<string, unknown>; demo?: Record<string, unknown> }) ?? {};
       const real = Number(
-        pick(balances.real, "available", "balance") ??
+        pick(balances.real, "balance", "available") ??
         pick(user, "balanceReal", "balance_real", "realBalance") ?? 0,
       );
       const demo = Number(
-        pick(balances.demo, "available", "balance") ??
+        pick(balances.demo, "balance", "available") ??
         pick(user, "balanceDemo", "balance_demo", "demoBalance") ?? 0,
       );
       const accountType = (String(pick(user, "accountType", "account_type") ?? "DEMO").toUpperCase() === "REAL")
