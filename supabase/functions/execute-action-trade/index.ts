@@ -193,9 +193,40 @@ Deno.serve(async (req) => {
     } catch { /* only used for trace; official order payload does not require it */ }
   }
 
+  // Resolve symbol + live price (broker rejects/settles to neutral when price=0)
+  let symbol = "";
+  try {
+    const assetRes = await brokerJson(`/api/assets/asset/${assetId}`, brokerToken);
+    const asset = (assetRes.asset as Record<string, unknown> | undefined) ?? assetRes;
+    symbol = String(asset?.symbol ?? "");
+  } catch (err) {
+    console.warn("execute-action-trade: could not resolve symbol", brokerErrorMessage(err));
+  }
+
+  let entryPrice = 0;
+  if (symbol) {
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      const from = now - 300;
+      const histRes = await fetch(
+        `https://prices.actionbroker.app/history?symbol=${symbol}&resolution=1&from=${from}&to=${now}&countback=3`,
+      );
+      if (histRes.ok) {
+        const hist = await histRes.json() as { c?: number[] };
+        if (Array.isArray(hist.c) && hist.c.length > 0) {
+          entryPrice = Number(hist.c[hist.c.length - 1]) || 0;
+        }
+      }
+    } catch (err) {
+      console.warn("execute-action-trade: price feed failed", (err as Error).message);
+    }
+  }
+
   console.log("execute-action-trade: sending", {
     userId: tokenRes.userId,
     asset: assetId,
+    symbol,
+    entryPrice,
     amount,
     direction,
     timeframe,
@@ -210,6 +241,12 @@ Deno.serve(async (req) => {
     method: "timeframe",
     expiryTime: durationFor(timeframe),
   };
+  if (symbol) payload.symbol = symbol;
+  if (entryPrice > 0) {
+    payload.price = entryPrice;
+    payload.entryPrice = entryPrice;
+  }
+  if (accountId) payload.accountId = accountId;
 
   let upstream: Response;
   try {
