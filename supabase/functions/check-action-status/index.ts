@@ -170,13 +170,23 @@ Deno.serve(async (req) => {
   if (!tradeId) return json({ success: false, message: "trade_id obrigatório" }, 400);
 
   const trade = await fetchTradeById(tradeId, brokerToken);
-  if (!trade) return json({ success: true, status: "PENDING" as Status });
+  if (!trade) {
+    console.warn("check-action-status: trade not found", { tradeId, userId: tokenRes.userId });
+    return json({ success: true, status: "PENDING" as Status, message: "Ordem ainda não encontrada na corretora" });
+  }
 
   const amount = Number(pick(trade, "amount") ?? 0);
   const profit = Number(pick(trade, "profit", "pnl", "payoutAmount") ?? 0);
   const payout = Number(pick(trade, "payout", "payoutPercent") ?? 0);
   const rawStatus = pick(trade, "result", "status");
   const status = normalizeStatus(rawStatus, profit);
+  console.log("check-action-status: trade status", {
+    tradeId,
+    status,
+    rawStatus,
+    profit,
+    keys: Object.keys(trade),
+  });
 
   if (status === "PENDING") return json({ success: true, status, trade });
 
