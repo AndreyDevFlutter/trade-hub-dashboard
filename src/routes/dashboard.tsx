@@ -94,8 +94,22 @@ function DashboardPage() {
       setAccountType(next);
       await refreshAccount();
       toast.success(`Conta ${next} ativada`);
-    } catch {
-      toast.error("Falha ao trocar de conta");
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } }; message?: string };
+      const raw = e?.response?.data?.message ?? e?.message ?? "";
+      const lower = raw.toLowerCase();
+      if (lower.includes("já é do tipo")) {
+        // Corretora considera que já está no tipo pedido — sincroniza UI.
+        setAccountType(next);
+        await refreshAccount();
+        toast.success(`Conta ${next} ativada`);
+      } else if (lower.includes("trades ativos") || lower.includes("operações ativas")) {
+        toast.error(
+          `Não dá pra trocar de conta agora: existem operações em aberto. Aguarde finalizarem.`,
+        );
+      } else {
+        toast.error(raw || "Falha ao trocar de conta");
+      }
     } finally {
       setSwitching(false);
     }
