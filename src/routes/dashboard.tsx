@@ -43,7 +43,8 @@ function formatTime(iso?: string) {
 
 function DashboardPage() {
   const navigate = useNavigate();
-  const { token, profile, accountType, setAccountType, setProfile, logout } = useAuthStore();
+  const { session, loading: sessionLoading } = useSession();
+  const { profile, accountType, brokerConnected, setAccountType, setProfile, setBrokerConnected, reset } = useAuthStore();
   const [assets, setAssets] = useState<ABAsset[]>([]);
   const [tabs, setTabs] = useState<ABTab[]>([]);
   const [activeTrades, setActiveTrades] = useState<ABTrade[]>([]);
@@ -51,6 +52,7 @@ function DashboardPage() {
   const [assetsLoading, setAssetsLoading] = useState(true);
   const [online, setOnline] = useState<number | null>(null);
   const [switching, setSwitching] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
 
   async function refreshAccount(syncAccountType = false) {
     const freshProfile = await userService.getProfile();
