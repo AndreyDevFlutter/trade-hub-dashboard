@@ -198,31 +198,16 @@ Deno.serve(async (req) => {
   }
 
   let accountId = body.accountId ?? undefined;
-  let symbol = body.asset ?? "";
-  let entryPrice: number | null = null;
   if (!accountId) {
     try {
       const me = await brokerJson("/api/auth/me", brokerToken);
       accountId = pickAccountId(me, accountType);
-    } catch { /* order may still work without accountId */ }
+    } catch { /* only used for trace; official order payload does not require it */ }
   }
-  try {
-    const assetInfo = await brokerJson(`/api/assets/asset/${encodeURIComponent(assetId)}`, brokerToken);
-    const assetPayload = (assetInfo.asset as Record<string, unknown> | undefined) ?? assetInfo;
-    symbol = String(pick(assetPayload, "symbol") ?? symbol ?? "");
-    const brokerLastPrice = Number(pick(assetPayload, "lastPrice", "price"));
-    entryPrice = Number.isFinite(brokerLastPrice) && brokerLastPrice > 0 ? brokerLastPrice : null;
-  } catch { /* fallback to price feed */ }
-  if (!entryPrice && symbol) entryPrice = await latestPriceForSymbol(symbol);
 
-  if (!symbol || !entryPrice) {
-    return json({ success: false, message: "Preço atual do ativo indisponível na corretora" }, 400);
-  }
   console.log("execute-action-trade: sending", {
     userId: tokenRes.userId,
-    assetId,
-    symbol,
-    entryPrice,
+    asset: assetId,
     amount,
     direction,
     timeframe,
@@ -231,19 +216,12 @@ Deno.serve(async (req) => {
   });
 
   const payload: Record<string, unknown> = {
-    assetId,
-    symbol,
+    asset: assetId,
     amount,
     direction,
-    price: entryPrice,
-    duration: durationFor(timeframe),
     method: "timeframe",
-    settlementMode: "BINARY",
-    type: accountType,
-    leverage: "1",
-    usedBonusAmount: "0",
+    expiryTime: durationFor(timeframe),
   };
-  if (accountId) payload.accountId = accountId;
 
   let upstream: Response;
   try {
