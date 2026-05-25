@@ -5,7 +5,7 @@ import { LogOut, TrendingUp, Wifi, Loader2, ArrowUpRight, ArrowDownRight } from 
 import { useAuthStore } from "@/store/authStore";
 import { userService } from "@/services/userService";
 import { authService } from "@/services/authService";
-import { tradeService } from "@/services/tradeService";
+import { supabase } from "@/integrations/supabase/client";
 import {
   actionbrokerService,
   type ABAsset,
@@ -209,7 +209,14 @@ function DashboardPage() {
           </div>
         </section>
 
-        <TradePanel assets={assets} accountType={accountType} onPlaced={refreshTrades} />
+        <TradePanel
+          assets={assets}
+          accountType={accountType}
+          brokerToken={token}
+          onPlaced={refreshTrades}
+          onBalanceRefresh={() => refreshAccount().catch(() => {})}
+        />
+
 
         {tabAssets.length > 0 && (
           <section className="bg-card border border-border rounded-xl p-6">
@@ -398,51 +405,74 @@ function AssetCard({ asset }: { asset: ABAsset }) {
 function TradePanel({
   assets,
   accountType,
+  brokerToken,
   onPlaced,
+  onBalanceRefresh,
 }: {
   assets: ABAsset[];
   accountType: "REAL" | "DEMO";
+  brokerToken: string | null;
   onPlaced: () => void;
+  onBalanceRefresh?: () => void;
 }) {
   const tradable = useMemo(() => assets.filter((a) => a.isOpen), [assets]);
   const [asset, setAsset] = useState<string>("");
   const [amount, setAmount] = useState<string>("1");
   const [timeFrame, setTimeFrame] = useState<"M1" | "M5" | "M15">("M1");
-  const [sending, setSending] = useState<null | "CALL" | "PUT">(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [pendingDirection, setPendingDirection] = useState<null | "CALL" | "PUT">(null);
 
   useEffect(() => {
-    if (!asset && tradable.length > 0) setAsset(tradable[0].symbol);
+    if (!asset && tradable.length > 0) setAsset(tradable[0].id);
   }, [tradable, asset]);
 
   async function place(direction: "CALL" | "PUT") {
+    if (isLoading) return; // bloqueia race conditions / múltiplos cliques
     const amt = Number(amount);
     if (!asset || !Number.isFinite(amt) || amt <= 0) {
       toast.error("Informe ativo e valor válido");
       return;
     }
-    setSending(direction);
+    setIsLoading(true);
+    setPendingDirection(direction);
     try {
-      const selected = tradable.find((item) => item.id === asset);
-      const res = await tradeService.sendOrder({
-        assetId: asset,
-        asset: selected?.symbol ?? asset,
-        accountId: "",
-        direction,
-        amount: amt,
-        account_type: accountType,
-        timeFrame,
+      const { data, error } = await supabase.functions.invoke("execute-action-trade", {
+        body: {
+          asset,
+          amount: amt,
+          direction,
+          timeframe: timeFrame,
+          account_type: accountType,
+        },
+        headers: brokerToken ? { "x-broker-token": brokerToken } : undefined,
       });
-      toast.success(res.message || `Ordem ${direction === "CALL" ? "Buy" : "Sell"} enviada`);
+
+      if (error) {
+        const ctx = (error as { context?: { error?: string; message?: string } }).context;
+        throw new Error(ctx?.message ?? ctx?.error ?? error.message ?? "Falha na operação");
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.message ?? "Falha na operação");
+      }
+
+      toast.success(
+        data.trade_id
+          ? `Ordem confirmada · trade ${data.trade_id}`
+          : (data.message ?? "Ordem confirmada"),
+      );
       onPlaced();
+      onBalanceRefresh?.();
     } catch (err) {
-      const msg =
-        (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data
-          ?.message ?? (err as Error)?.message ?? "Falha ao enviar ordem";
-      toast.error(msg);
+      toast.error((err as Error)?.message ?? "Falha na operação");
     } finally {
-      setSending(null);
+      setIsLoading(false);
+      setPendingDirection(null);
     }
   }
+
+  const inputsDisabled = isLoading;
+  const buttonsDisabled = isLoading || !asset;
 
   return (
     <section className="bg-card border border-border rounded-xl p-6">
@@ -463,7 +493,8 @@ function TradePanel({
           <select
             value={asset}
             onChange={(e) => setAsset(e.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            disabled={inputsDisabled}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-60"
           >
             {tradable.length === 0 && <option value="">Nenhum ativo aberto</option>}
             {tradable.map((a) => (
@@ -482,6 +513,7 @@ function TradePanel({
             step={1}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            disabled={inputsDisabled}
           />
         </label>
 
@@ -490,7 +522,8 @@ function TradePanel({
           <select
             value={timeFrame}
             onChange={(e) => setTimeFrame(e.target.value as "M1" | "M5" | "M15")}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            disabled={inputsDisabled}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-60"
           >
             <option value="M1">M1 (1 min)</option>
             <option value="M5">M5 (5 min)</option>
@@ -502,10 +535,10 @@ function TradePanel({
           <Button
             type="button"
             onClick={() => place("CALL")}
-            disabled={sending !== null || !asset}
+            disabled={buttonsDisabled}
             className="h-10 bg-bull hover:bg-bull/90 text-white"
           >
-            {sending === "CALL" ? (
+            {pendingDirection === "CALL" ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <>
@@ -516,10 +549,10 @@ function TradePanel({
           <Button
             type="button"
             onClick={() => place("PUT")}
-            disabled={sending !== null || !asset}
+            disabled={buttonsDisabled}
             className="h-10 bg-bear hover:bg-bear/90 text-white"
           >
-            {sending === "PUT" ? (
+            {pendingDirection === "PUT" ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <>
@@ -532,6 +565,7 @@ function TradePanel({
     </section>
   );
 }
+
 
 function BalanceCard({
   label,
