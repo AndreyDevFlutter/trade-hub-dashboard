@@ -24,9 +24,33 @@ function json(body: unknown, status = 200) {
 function pick<T = unknown>(obj: Record<string, unknown> | undefined, ...keys: string[]): T | undefined {
   if (!obj) return undefined;
   for (const k of keys) {
-    if (obj[k] !== undefined && obj[k] !== null) return obj[k] as T;
+    if (obj[k] !== undefined && obj[k] !== null && obj[k] !== "") return obj[k] as T;
   }
   return undefined;
+}
+
+function listFromPayload(payload: Record<string, unknown>): Array<Record<string, unknown>> {
+  const nested = payload.data as Record<string, unknown> | Array<Record<string, unknown>> | undefined;
+  const candidates = [
+    payload.trades,
+    payload.items,
+    payload.orders,
+    payload.history,
+    nested,
+    Array.isArray(nested) ? undefined : nested?.trades,
+    Array.isArray(nested) ? undefined : nested?.items,
+    Array.isArray(nested) ? undefined : nested?.orders,
+    Array.isArray(nested) ? undefined : nested?.history,
+    payload,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate as Array<Record<string, unknown>>;
+  }
+  return [];
+}
+
+function sameTrade(trade: Record<string, unknown>, tradeId: string) {
+  return ["id", "orderId", "tradeId", "uuid"].some((key) => String(trade[key] ?? "") === tradeId);
 }
 
 function normalizeStatus(raw: unknown, profit: number): Status {
@@ -50,41 +74,28 @@ async function brokerGet(path: string, token: string) {
 }
 
 async function fetchTradeById(tradeId: string, token: string): Promise<Record<string, unknown> | null> {
-  try {
-    const r = await brokerGet(`/api/trading/${tradeId}`, token);
-    if (r.ok) {
-      const txt = await r.text();
-      const j = txt ? JSON.parse(txt) : {};
-      const trade = (j.trade as Record<string, unknown>) ?? (j.data as Record<string, unknown>) ?? j;
-      if (trade && (trade as { id?: string }).id) return trade;
-    }
-  } catch { /* fallback */ }
-  try {
-    const r = await brokerGet(`/api/trading/history?page=1&limit=50`, token);
-    if (r.ok) {
-      const txt = await r.text();
-      const j = txt ? JSON.parse(txt) : {};
-      const list: Array<Record<string, unknown>> =
-        (j.trades as Array<Record<string, unknown>>) ??
-        (j.data as Array<Record<string, unknown>>) ??
-        (Array.isArray(j) ? j : []);
-      const found = list.find((t) => String(t.id) === tradeId);
-      if (found) return found;
-    }
-  } catch { /* fallback */ }
-  try {
-    const r = await brokerGet(`/api/trading/active`, token);
-    if (r.ok) {
-      const txt = await r.text();
-      const j = txt ? JSON.parse(txt) : {};
-      const list: Array<Record<string, unknown>> =
-        (j.trades as Array<Record<string, unknown>>) ??
-        (j.data as Array<Record<string, unknown>>) ??
-        (Array.isArray(j) ? j : []);
-      const found = list.find((t) => String(t.id) === tradeId);
-      if (found) return found;
-    }
-  } catch { /* fallback */ }
+  for (const path of [`/api/trading/${tradeId}`, `/api/trading/order/${tradeId}`, `/api/trading/status/${tradeId}`]) {
+    try {
+      const r = await brokerGet(path, token);
+      if (r.ok) {
+        const txt = await r.text();
+        const j = txt ? JSON.parse(txt) : {};
+        const trade = (j.trade as Record<string, unknown>) ?? (j.order as Record<string, unknown>) ?? (j.data as Record<string, unknown>) ?? j;
+        if (trade && Object.keys(trade).length) return trade;
+      }
+    } catch { /* fallback */ }
+  }
+  for (const path of [`/api/trading/history?page=1&limit=100`, `/api/trading/active`]) {
+    try {
+      const r = await brokerGet(path, token);
+      if (r.ok) {
+        const txt = await r.text();
+        const j = txt ? JSON.parse(txt) : {};
+        const found = listFromPayload(j).find((t) => sameTrade(t, tradeId));
+        if (found) return found;
+      }
+    } catch { /* fallback */ }
+  }
   return null;
 }
 
