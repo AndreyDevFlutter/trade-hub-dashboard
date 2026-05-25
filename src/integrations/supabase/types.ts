@@ -14,7 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      broker_connections: {
+        Row: {
+          account_type: string
+          broker: string
+          broker_token: string
+          broker_user_id: string | null
+          connected_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_type?: string
+          broker?: string
+          broker_token: string
+          broker_user_id?: string | null
+          connected_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_type?: string
+          broker?: string
+          broker_token?: string
+          broker_user_id?: string | null
+          connected_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
