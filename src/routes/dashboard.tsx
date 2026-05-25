@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { LogOut, TrendingUp, Wifi, Loader2, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
@@ -212,9 +212,19 @@ function DashboardPage() {
         <TradePanel
           assets={assets}
           accountType={accountType}
-          brokerToken={token}
           onPlaced={refreshTrades}
           onBalanceRefresh={() => refreshAccount().catch(() => {})}
+          onBalanceFromServer={(real, demo) => {
+            if (!profile) return;
+            setProfile({ ...profile, balance_real: real, balance_demo: demo });
+          }}
+          onTradeResolved={(trade) => {
+            setHistory((prev) => {
+              const next = [trade, ...prev.filter((t) => t.id !== trade.id)];
+              return next.slice(0, 20);
+            });
+            setActiveTrades((prev) => prev.filter((t) => t.id !== trade.id));
+          }}
         />
 
 
@@ -405,35 +415,121 @@ function AssetCard({ asset }: { asset: ABAsset }) {
 function TradePanel({
   assets,
   accountType,
-  brokerToken,
   onPlaced,
   onBalanceRefresh,
+  onBalanceFromServer,
+  onTradeResolved,
 }: {
   assets: ABAsset[];
   accountType: "REAL" | "DEMO";
-  brokerToken: string | null;
   onPlaced: () => void;
   onBalanceRefresh?: () => void;
+  onBalanceFromServer?: (real: number, demo: number) => void;
+  onTradeResolved?: (trade: ABTrade) => void;
 }) {
   const tradable = useMemo(() => assets.filter((a) => a.isOpen), [assets]);
   const [asset, setAsset] = useState<string>("");
   const [amount, setAmount] = useState<string>("1");
   const [timeFrame, setTimeFrame] = useState<"M1" | "M5" | "M15">("M1");
-  const [isLoading, setIsLoading] = useState(false);
+
+  const [isSending, setIsSending] = useState(false);
+  const [isWaitingResult, setIsWaitingResult] = useState(false);
   const [pendingDirection, setPendingDirection] = useState<null | "CALL" | "PUT">(null);
+  const [pendingTradeId, setPendingTradeId] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(0);
+
+  const timeoutRef = useRef<number | null>(null);
+  const intervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!asset && tradable.length > 0) setAsset(tradable[0].id);
   }, [tradable, asset]);
 
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+      if (intervalRef.current) window.clearInterval(intervalRef.current);
+    };
+  }, []);
+
+  function clearTimers() {
+    if (timeoutRef.current) {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (intervalRef.current) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }
+
+  function resetPending() {
+    clearTimers();
+    setIsWaitingResult(false);
+    setPendingDirection(null);
+    setPendingTradeId(null);
+    setCountdown(0);
+  }
+
+  async function pollResult(tradeId: string, attempt = 0) {
+    try {
+      const { data, error } = await supabase.functions.invoke("check-action-status", {
+        body: { trade_id: tradeId },
+      });
+      if (error) throw new Error(error.message ?? "Falha ao consultar resultado");
+      if (!data?.success) throw new Error(data?.message ?? "Falha ao consultar resultado");
+
+      if (data.status === "PENDING") {
+        if (attempt < 2) {
+          window.setTimeout(() => pollResult(tradeId, attempt + 1), 3000);
+          return;
+        }
+        toast("Resultado ainda não disponível — atualizando histórico.");
+        onPlaced();
+        onBalanceRefresh?.();
+        resetPending();
+        return;
+      }
+
+      // WIN / LOSS / DRAW
+      if (
+        onBalanceFromServer &&
+        Number.isFinite(Number(data.new_balance_real)) &&
+        Number.isFinite(Number(data.new_balance_demo))
+      ) {
+        onBalanceFromServer(Number(data.new_balance_real), Number(data.new_balance_demo));
+      }
+      onBalanceRefresh?.();
+      if (data.trade && onTradeResolved) {
+        onTradeResolved(data.trade as ABTrade);
+      }
+      onPlaced();
+
+      const profit = Number(data.profit ?? 0);
+      if (data.status === "WIN") {
+        toast.success(`Win! ${profit >= 0 ? "+" : ""}${formatMoney(profit)}`);
+      } else if (data.status === "LOSS") {
+        toast.error(`Loss · ${formatMoney(profit)}`);
+      } else {
+        toast("Empate · valor devolvido");
+      }
+      resetPending();
+    } catch (err) {
+      toast.error((err as Error)?.message ?? "Falha ao consultar resultado");
+      onPlaced();
+      onBalanceRefresh?.();
+      resetPending();
+    }
+  }
+
   async function place(direction: "CALL" | "PUT") {
-    if (isLoading) return; // bloqueia race conditions / múltiplos cliques
+    if (isSending || isWaitingResult) return;
     const amt = Number(amount);
     if (!asset || !Number.isFinite(amt) || amt <= 0) {
       toast.error("Informe ativo e valor válido");
       return;
     }
-    setIsLoading(true);
+    setIsSending(true);
     setPendingDirection(direction);
     try {
       const { data, error } = await supabase.functions.invoke("execute-action-trade", {
@@ -444,35 +540,52 @@ function TradePanel({
           timeframe: timeFrame,
           account_type: accountType,
         },
-        headers: brokerToken ? { "x-broker-token": brokerToken } : undefined,
       });
 
       if (error) {
         const ctx = (error as { context?: { error?: string; message?: string } }).context;
         throw new Error(ctx?.message ?? ctx?.error ?? error.message ?? "Falha na operação");
       }
+      if (!data?.success) throw new Error(data?.message ?? "Falha na operação");
 
-      if (!data?.success) {
-        throw new Error(data?.message ?? "Falha na operação");
+      const tradeId = String(data.trade_id ?? "");
+      toast.success(tradeId ? `Ordem enviada · ${tradeId}` : "Ordem enviada");
+      onPlaced();
+
+      if (!tradeId) {
+        // Sem id não há como consultar — libera UI
+        setIsSending(false);
+        setPendingDirection(null);
+        return;
       }
 
-      toast.success(
-        data.trade_id
-          ? `Ordem confirmada · trade ${data.trade_id}`
-          : (data.message ?? "Ordem confirmada"),
-      );
-      onPlaced();
-      onBalanceRefresh?.();
+      const waitMs = timeFrame === "M15" ? 905_000 : timeFrame === "M5" ? 305_000 : 65_000;
+      setIsSending(false);
+      setIsWaitingResult(true);
+      setPendingTradeId(tradeId);
+      setCountdown(Math.floor(waitMs / 1000));
+
+      intervalRef.current = window.setInterval(() => {
+        setCountdown((c) => (c > 0 ? c - 1 : 0));
+      }, 1000);
+
+      timeoutRef.current = window.setTimeout(() => {
+        if (intervalRef.current) {
+          window.clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+        pollResult(tradeId, 0);
+      }, waitMs);
     } catch (err) {
       toast.error((err as Error)?.message ?? "Falha na operação");
-    } finally {
-      setIsLoading(false);
+      setIsSending(false);
       setPendingDirection(null);
     }
   }
 
-  const inputsDisabled = isLoading;
-  const buttonsDisabled = isLoading || !asset;
+  const isBusy = isSending || isWaitingResult;
+  const inputsDisabled = isBusy;
+  const buttonsDisabled = isBusy || !asset;
 
   return (
     <section className="bg-card border border-border rounded-xl p-6">
@@ -486,6 +599,12 @@ function TradePanel({
           </p>
         </div>
       </div>
+
+      {isWaitingResult && (
+        <div className="mb-4 rounded-md border border-border bg-background/60 px-3 py-2 text-xs text-muted-foreground">
+          Operação em andamento — aguarde o fechamento da vela ({countdown}s).
+        </div>
+      )}
 
       <div className="grid gap-3 md:grid-cols-4">
         <label className="flex flex-col gap-1.5 text-xs">
@@ -539,7 +658,10 @@ function TradePanel({
             className="h-10 bg-bull hover:bg-bull/90 text-white"
           >
             {pendingDirection === "CALL" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="flex items-center gap-1.5 text-xs">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {isWaitingResult ? `${timeFrame} · ${countdown}s` : "Enviando…"}
+              </span>
             ) : (
               <>
                 <ArrowUpRight className="h-4 w-4 mr-1" /> Buy
@@ -553,7 +675,10 @@ function TradePanel({
             className="h-10 bg-bear hover:bg-bear/90 text-white"
           >
             {pendingDirection === "PUT" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="flex items-center gap-1.5 text-xs">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {isWaitingResult ? `${timeFrame} · ${countdown}s` : "Enviando…"}
+              </span>
             ) : (
               <>
                 <ArrowDownRight className="h-4 w-4 mr-1" /> Sell
