@@ -102,31 +102,39 @@ function DashboardPage() {
   }
 
   useEffect(() => {
+    if (!session) return;
     refreshAssets();
     refreshTrades();
     actionbrokerService.onlineUsers().then(setOnline).catch(() => {});
-  }, []);
+  }, [session, brokerConnected]);
 
   useEffect(() => {
-    if (!token) {
+    if (sessionLoading) return;
+    if (!session) {
       navigate({ to: "/login" });
       return;
     }
-    refreshAccount(true).catch(() => {
-      toast.error("Falha ao carregar perfil");
-      logout();
-      navigate({ to: "/login" });
+    refreshAccount(true).then(() => {
+      setBrokerConnected(true);
+    }).catch((err: unknown) => {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401) {
+        setBrokerConnected(false);
+        setConnectOpen(true);
+      } else {
+        toast.error("Falha ao carregar perfil");
+      }
     });
     const interval = window.setInterval(() => {
       refreshAccount().catch(() => {});
       refreshTrades().catch(() => {});
     }, 5000);
     return () => window.clearInterval(interval);
-  }, [token, navigate, setAccountType, setProfile, logout]);
+  }, [session, sessionLoading, navigate, setAccountType, setProfile, setBrokerConnected]);
 
-  function handleLogout() {
-    authService.logout();
-    logout();
+  async function handleLogout() {
+    await authService.signOut();
+    reset();
     navigate({ to: "/login" });
   }
 
