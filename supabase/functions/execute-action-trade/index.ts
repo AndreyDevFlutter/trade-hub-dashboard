@@ -235,11 +235,11 @@ Deno.serve(async (req) => {
   });
 
   const payload: Record<string, unknown> = {
-    asset: assetId,
+    assetId,
     amount,
     direction,
     method: "timeframe",
-    expiryTime: durationFor(timeframe),
+    duration: durationFor(timeframe),
   };
   if (symbol) payload.symbol = symbol;
   if (entryPrice > 0) {
