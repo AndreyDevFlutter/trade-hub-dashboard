@@ -25,8 +25,8 @@ export const Route = createFileRoute("/api/balance")({
           | null;
         const b = data?.user?.balances;
         return Response.json({
-          balance_real: b?.real?.available ?? b?.real?.balance ?? 0,
-          balance_demo: b?.demo?.available ?? b?.demo?.balance ?? 0,
+          balance_real: b?.real?.balance ?? b?.real?.available ?? 0,
+          balance_demo: b?.demo?.balance ?? b?.demo?.available ?? 0,
         });
       },
     },
