@@ -94,6 +94,20 @@ function pickAccountId(raw: Record<string, unknown>, accountType: AccountType): 
   return pick<string>(match, "id", "accountId");
 }
 
+async function fetchBrokerBalances(token: string) {
+  const me = await brokerJson("/api/auth/me", token);
+  const user = (me.user as Record<string, unknown> | undefined) ?? me;
+  const balances = user.balances as { real?: Record<string, unknown>; demo?: Record<string, unknown> } | undefined;
+  const real = Number(pick(balances?.real, "available", "balance") ?? pick(user, "balanceReal", "balance_real", "realBalance") ?? 0);
+  const demo = Number(pick(balances?.demo, "available", "balance") ?? pick(user, "balanceDemo", "balance_demo", "demoBalance") ?? 0);
+  const active = String(pick(user, "accountType", "account_type") ?? "DEMO").toUpperCase() === "REAL" ? "REAL" : "DEMO";
+  return {
+    real: Number.isFinite(real) ? real : 0,
+    demo: Number.isFinite(demo) ? demo : 0,
+    active,
+  };
+}
+
 async function brokerJson(path: string, token: string, init?: RequestInit): Promise<Record<string, unknown>> {
   const response = await fetch(`${BROKER_BASE}${path}`, {
     ...init,
@@ -310,6 +324,7 @@ Deno.serve(async (req) => {
   const trade = (data.trade as Record<string, unknown> | undefined) ?? undefined;
   const dataNested = (data.data as Record<string, unknown> | undefined) ?? undefined;
   const order = (data.order as Record<string, unknown> | undefined) ?? undefined;
+  const persistedTrade = trade ?? order ?? dataNested ?? data;
   const trade_id =
     (data.orderId as string) ??
     (data.tradeId as string) ??
@@ -319,14 +334,17 @@ Deno.serve(async (req) => {
     (dataNested?.orderId as string) ??
     (dataNested?.tradeId as string) ??
     (dataNested?.id as string) ?? "";
-  const new_balance = Number(
-    (data.balance as number | string | undefined) ??
-    (dataNested?.balance as number | string | undefined) ??
-    (trade?.balance as number | string | undefined) ?? 0,
-  );
+  const isMarketing = persistedTrade?.isMarketing === true;
+  const balances = await fetchBrokerBalances(brokerToken).catch((err) => {
+    console.warn("execute-action-trade: balance refresh failed", brokerErrorMessage(err));
+    return { real: 0, demo: 0, active: accountType };
+  });
   console.log("execute-action-trade: broker accepted", {
     trade_id,
     accountType,
+    isMarketing,
+    balanceReal: balances.real,
+    balanceDemo: balances.demo,
     hasAccountId: Boolean(accountId),
     keys: Object.keys(data),
   });
@@ -335,9 +353,15 @@ Deno.serve(async (req) => {
     success: true,
     trade_id,
     message: (data.message as string) ?? "Ordem enviada",
-    new_balance,
+    new_balance: accountType === "REAL" ? balances.real : balances.demo,
+    new_balance_real: balances.real,
+    new_balance_demo: balances.demo,
+    is_marketing: isMarketing,
+    warning: isMarketing
+      ? "A corretora aceitou a ordem como marketing; o painel da corretora pode não liquidar essa operação como real."
+      : null,
     account_type: accountType,
     account_id: accountId ?? null,
-    broker_trade: trade ?? order ?? dataNested ?? data,
+    broker_trade: persistedTrade,
   });
 });

@@ -29,6 +29,12 @@ export const useAuthStore = create<AppState>()(
         })),
       reset: () => set({ profile: null, brokerConnected: false }),
     }),
-    { name: "trader-app" },
+    {
+      name: "trader-app",
+      partialize: (state) => ({
+        accountType: state.accountType,
+        brokerConnected: state.brokerConnected,
+      }),
+    },
   ),
 );
