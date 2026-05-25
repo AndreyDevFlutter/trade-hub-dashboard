@@ -94,6 +94,20 @@ function pickAccountId(raw: Record<string, unknown>, accountType: AccountType): 
   return pick<string>(match, "id", "accountId");
 }
 
+async function fetchBrokerBalances(token: string) {
+  const me = await brokerJson("/api/auth/me", token);
+  const user = (me.user as Record<string, unknown> | undefined) ?? me;
+  const balances = user.balances as { real?: Record<string, unknown>; demo?: Record<string, unknown> } | undefined;
+  const real = Number(pick(balances?.real, "available", "balance") ?? pick(user, "balanceReal", "balance_real", "realBalance") ?? 0);
+  const demo = Number(pick(balances?.demo, "available", "balance") ?? pick(user, "balanceDemo", "balance_demo", "demoBalance") ?? 0);
+  const active = String(pick(user, "accountType", "account_type") ?? "DEMO").toUpperCase() === "REAL" ? "REAL" : "DEMO";
+  return {
+    real: Number.isFinite(real) ? real : 0,
+    demo: Number.isFinite(demo) ? demo : 0,
+    active,
+  };
+}
+
 async function brokerJson(path: string, token: string, init?: RequestInit): Promise<Record<string, unknown>> {
   const response = await fetch(`${BROKER_BASE}${path}`, {
     ...init,
