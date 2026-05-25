@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { LogOut, TrendingUp, Wifi, Loader2, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
@@ -212,9 +212,19 @@ function DashboardPage() {
         <TradePanel
           assets={assets}
           accountType={accountType}
-          brokerToken={token}
           onPlaced={refreshTrades}
           onBalanceRefresh={() => refreshAccount().catch(() => {})}
+          onBalanceFromServer={(real, demo) => {
+            if (!profile) return;
+            setProfile({ ...profile, balance_real: real, balance_demo: demo });
+          }}
+          onTradeResolved={(trade) => {
+            setHistory((prev) => {
+              const next = [trade, ...prev.filter((t) => t.id !== trade.id)];
+              return next.slice(0, 20);
+            });
+            setActiveTrades((prev) => prev.filter((t) => t.id !== trade.id));
+          }}
         />
 
 
