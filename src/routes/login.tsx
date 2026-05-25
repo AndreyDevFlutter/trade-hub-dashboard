@@ -2,8 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { authService } from "@/services/authService";
-import { userService } from "@/services/userService";
-import { useAuthStore } from "@/store/authStore";
+import { useSession } from "@/hooks/use-session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,8 +11,8 @@ import { TrendingUp, Loader2 } from "lucide-react";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Login — Trader Dashboard" },
-      { name: "description", content: "Acesse seu painel de trading." },
+      { title: "Entrar — TraderHub" },
+      { name: "description", content: "Acesse sua conta TraderHub." },
     ],
   }),
   component: LoginPage,
@@ -21,33 +20,35 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { token, setToken, setProfile } = useAuthStore();
+  const { session, loading: loadingSession } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (token) navigate({ to: "/dashboard" });
-  }, [token, navigate]);
+    if (session) navigate({ to: "/dashboard" });
+  }, [session, navigate]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     try {
-      const { token } = await authService.login({ email, password });
-      setToken(token);
-      const profile = await userService.getProfile();
-      setProfile(profile);
+      await authService.signIn({ email, password });
       toast.success("Login realizado com sucesso");
       navigate({ to: "/dashboard" });
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? "Falha ao autenticar";
-      toast.error(msg);
+      toast.error((err as Error)?.message ?? "Falha ao autenticar");
     } finally {
       setLoading(false);
     }
+  }
+
+  if (loadingSession) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </main>
+    );
   }
 
   return (
@@ -60,12 +61,12 @@ function LoginPage() {
         <div className="bg-card border border-border rounded-xl p-8 shadow-2xl">
           <h1 className="text-2xl font-semibold">Entrar na plataforma</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Acesse com suas credenciais da corretora.
+            Use sua conta TraderHub. A conexão com a corretora é feita depois do login.
           </p>
 
           <form onSubmit={onSubmit} className="space-y-4 mt-6">
             <div className="space-y-2">
-              <Label htmlFor="email">Email / Login</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -98,7 +99,10 @@ function LoginPage() {
           </form>
 
           <p className="text-xs text-muted-foreground mt-6 text-center">
-            Use as credenciais ativas da corretora.
+            Ainda não tem conta?{" "}
+            <Link to="/signup" className="text-primary hover:underline">
+              Cadastre-se
+            </Link>
           </p>
         </div>
       </div>
