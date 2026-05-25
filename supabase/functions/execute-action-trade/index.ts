@@ -166,6 +166,15 @@ Deno.serve(async (req) => {
       accountId = pickAccountId(me, accountType);
     } catch { /* order may still work without accountId */ }
   }
+  console.log("execute-action-trade: sending", {
+    userId: tokenRes.userId,
+    assetId,
+    amount,
+    direction,
+    timeframe,
+    accountType,
+    hasAccountId: Boolean(accountId),
+  });
 
   const payload: Record<string, unknown> = {
     assetId,
@@ -204,6 +213,7 @@ Deno.serve(async (req) => {
   if (!upstream.ok) {
     const message =
       (data.message as string) ?? (data.error as string) ?? `Erro ${upstream.status} na corretora`;
+    console.error("execute-action-trade: broker rejected", { status: upstream.status, message, keys: Object.keys(data) });
     return json({ success: false, message, broker_status: upstream.status }, upstream.status);
   }
 
@@ -224,6 +234,12 @@ Deno.serve(async (req) => {
     (dataNested?.balance as number | string | undefined) ??
     (trade?.balance as number | string | undefined) ?? 0,
   );
+  console.log("execute-action-trade: broker accepted", {
+    trade_id,
+    accountType,
+    hasAccountId: Boolean(accountId),
+    keys: Object.keys(data),
+  });
 
   return json({
     success: true,
