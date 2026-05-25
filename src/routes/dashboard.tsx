@@ -5,7 +5,7 @@ import { LogOut, TrendingUp, Wifi, Loader2, ArrowUpRight, ArrowDownRight } from 
 import { useAuthStore } from "@/store/authStore";
 import { userService } from "@/services/userService";
 import { authService } from "@/services/authService";
-import { tradeService } from "@/services/tradeService";
+import { supabase } from "@/integrations/supabase/client";
 import {
   actionbrokerService,
   type ABAsset,
