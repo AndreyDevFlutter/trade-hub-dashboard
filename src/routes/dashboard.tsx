@@ -209,7 +209,14 @@ function DashboardPage() {
           </div>
         </section>
 
-        <TradePanel assets={assets} accountType={accountType} onPlaced={refreshTrades} />
+        <TradePanel
+          assets={assets}
+          accountType={accountType}
+          brokerToken={token}
+          onPlaced={refreshTrades}
+          onBalanceRefresh={() => refreshAccount().catch(() => {})}
+        />
+
 
         {tabAssets.length > 0 && (
           <section className="bg-card border border-border rounded-xl p-6">
