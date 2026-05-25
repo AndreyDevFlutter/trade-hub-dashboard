@@ -215,6 +215,10 @@ function DashboardPage() {
               </Avatar>
               <span className="text-sm hidden sm:inline">{profile.name}</span>
             </div>
+            <Button variant="outline" size="sm" onClick={() => setConnectOpen(true)}>
+              <Link2 className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1">Corretora</span>
+            </Button>
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline ml-1">Sair</span>
@@ -222,6 +226,15 @@ function DashboardPage() {
           </div>
         </div>
       </header>
+      <ConnectBrokerModal
+        open={connectOpen}
+        onOpenChange={setConnectOpen}
+        onConnected={() => {
+          setBrokerConnected(true);
+          refreshAccount(true).catch(() => {});
+        }}
+      />
+
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         <section className="grid gap-4 md:grid-cols-3">
